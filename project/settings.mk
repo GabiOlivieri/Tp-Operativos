@@ -15,3 +15,6 @@ ARGS=
 # Valgrind flags
 MEMCHECK_FLAGS=--track-origins=yes --log-file="memcheck.log"
 HELGRIND_FLAGS=--log-file="helgrind.log"
+
+# Libraries
+LIBS=commons
