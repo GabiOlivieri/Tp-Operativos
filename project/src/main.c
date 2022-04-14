@@ -1,7 +1,8 @@
-#include <stdlib.h>
-#include <stdio.h>
+#include <consola.h>
 
-int main(int argc, char* argv[]) {
-    puts("Hello world!!");
+int main(int argc, char** argv) {
+
+    consola(argc , argv);
+
     return 0;
 }
