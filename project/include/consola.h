@@ -22,6 +22,6 @@ bool esta_bien_definido_el_config(t_log* logger, t_config* config);
 * @NAME: liberar_memoria
 * @DESC: libera la memoria usada en este modulo.
 */
-void liberar_memoria(t_log* logger, t_config* config , char* ip_kernel);
+void liberar_memoria(t_log* logger, t_config* config);
 
 #endif

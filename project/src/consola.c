@@ -17,7 +17,7 @@ int consola(int cantidadArgumentos , char** argumentos){
     ip_kernel = config_get_string_value(config , "IP_KERNEL");
     puerto_kernel = config_get_int_value(config , "PUERTO_KERNEL");
 
-    liberar_memoria(logger , config , ip_kernel);
+    liberar_memoria(logger , config);
     return EXIT_SUCCESS;
 }
 
@@ -35,8 +35,7 @@ bool esta_bien_definido_el_config(t_log* logger, t_config* config){
 }
 
 
-void liberar_memoria(t_log* logger, t_config* config , char* ip_kernel){
+void liberar_memoria(t_log* logger, t_config* config){
     log_destroy(logger);
     config_destroy(config);
-    free(ip_kernel);
 }
