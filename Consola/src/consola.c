@@ -2,8 +2,8 @@
 
 
 int main(int argc, char** argv) {
-    t_log* logger = log_create("./log/consola.log","CONSOLA", false , LOG_LEVEL_ERROR);
-    t_config* config = config_create("./config/consola.conf");
+    t_log* logger = log_create("./consola.log","CONSOLA", false , LOG_LEVEL_ERROR);
+    t_config* config = config_create("./consola.conf");
     t_nombre* nombre = malloc(sizeof(t_nombre));
 
     if(argc != 3) {
