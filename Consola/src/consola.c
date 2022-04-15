@@ -16,18 +16,12 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    // if(!pseudocodigo){
-    //     log_error(logger , "no se pudo abrir el archivo de pseudocodigo");
-    //     return EXIT_FAILURE;
-    // }
-
-
     leer_config(config , nombre);
 
-    char* pseudocodigo = leer_file(argv[2]);
-    printf("%s",pseudocodigo);
+    leer_file(argv[2],logger);
 
-    liberar_memoria(logger , config , nombre , pseudocodigo);
+
+    liberar_memoria(logger , config , nombre);
     return EXIT_SUCCESS;
 }
 
@@ -41,30 +35,51 @@ void leer_config(t_config* config, t_nombre* nombre){
     nombre->puerto_kernel = config_get_int_value(config , "PUERTO_KERNEL");
 }
 
-char* leer_file(char* path){
+void leer_file(char* path,t_log* logger){
     FILE* pseudocodigo = fopen(path , "r");
+    char* token;
+    char* param;
+    char* argumentos;
+
 
     struct stat sb;
     if (stat(path, &sb) == -1) {
         perror("stat");
+        log_error(logger , "No encontró el archivo de pseudocodigo");
         exit(EXIT_FAILURE);
     }
 
     char* file_contents = malloc(sb.st_size + 1);
     fread(file_contents, sb.st_size, 1, pseudocodigo);
 
-    // printf("%s\n", file_contents);
+    char* rest = file_contents;
 
+    while ((token = strtok_r(rest, "\n", &rest))){
+
+            if (strcmp(token, "NO_OP") == 0){
+            	for(int i=0;i<=5;i++){
+            		printf("NO_OP\n");
+            	}
+            }else{
+            	param = strtok_r(token, " ", &token);
+            	printf("%s ", param);
+
+             while((argumentos = strtok_r(token, " ", &token)))
+            	 printf("%d ", atoi(argumentos));
+            }
+            printf("\n");
+    }
+
+    free(file_contents);
     fclose(pseudocodigo);
-    return file_contents;
 }
 
-void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre , char* pseudocodigo){
+void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre){
     log_destroy(logger);
     config_destroy(config);
     nombre_free(nombre);
-    free(pseudocodigo);
 }
+
 
 void nombre_free(t_nombre* nombre){
     // free(nombre->ip_kernel); // no se porque sin esto me hace todo el free de una igual XD

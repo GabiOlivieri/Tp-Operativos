@@ -28,13 +28,13 @@ void leer_config(t_config* config, t_nombre* nombre);
 * @NAME: leer_file
 * @DESC: lee los datos del config y si falta alguno retorna false.
 */
-char* leer_file(char* path);
+void leer_file(char* path,t_log* logger);
 
 /**
 * @NAME: liberar_memoria
 * @DESC: libera la memoria usada en este modulo.
 */
-void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre, char* pseudocodigo);
+void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre);
 
 /**
 * @NAME: nombre_free
