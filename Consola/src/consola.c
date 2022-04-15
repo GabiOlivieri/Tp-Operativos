@@ -5,29 +5,28 @@ int main(int argc, char** argv) {
     t_log* logger = log_create("./consola.log","CONSOLA", false , LOG_LEVEL_ERROR);
     t_config* config = config_create("./consola.conf");
     t_nombre* nombre = malloc(sizeof(t_nombre));
+    char* config_properties[] = {
+        "IP_KERNEL",
+        "PUERTO_KERNEL",
+        NULL
+    };
 
     if(argc != 3) {
         log_error(logger, "se espera que ingrese 2 parametros por consola");
         return EXIT_FAILURE;
     }
 
-    if(!esta_bien_definido_el_config(config)) {
+    if(!config_has_all_properties(config , config_properties)) {
         log_error(logger , "esta mal definido el config");
         return EXIT_FAILURE;
     }
 
-    leer_config(config , nombre);
-
     leer_file(argv[2],logger);
 
+    leer_config(config , nombre);
 
     liberar_memoria(logger , config , nombre);
     return EXIT_SUCCESS;
-}
-
-
-bool esta_bien_definido_el_config(t_config* config){
-    return config_has_property(config , "IP_KERNEL") && config_has_property(config , "PUERTO_KERNEL");
 }
 
 void leer_config(t_config* config, t_nombre* nombre){
@@ -36,21 +35,15 @@ void leer_config(t_config* config, t_nombre* nombre){
 }
 
 void leer_file(char* path,t_log* logger){
-    FILE* pseudocodigo = fopen(path , "r");
+    char* file_contents = leer_archivo_completo(path);
     char* token;
     char* param;
     char* argumentos;
 
-
-    struct stat sb;
-    if (stat(path, &sb) == -1) {
-        perror("stat");
+    if(!file_contents){
         log_error(logger , "No encontró el archivo de pseudocodigo");
         exit(EXIT_FAILURE);
     }
-
-    char* file_contents = malloc(sb.st_size + 1);
-    fread(file_contents, sb.st_size, 1, pseudocodigo);
 
     char* rest = file_contents;
 
@@ -71,7 +64,6 @@ void leer_file(char* path,t_log* logger){
     }
 
     free(file_contents);
-    fclose(pseudocodigo);
 }
 
 void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre){

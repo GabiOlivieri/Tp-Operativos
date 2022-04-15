@@ -2,7 +2,7 @@
 LIBS=
 
 # Custom libraries' paths
-SHARED_LIBPATHS=
+SHARED_LIBPATHS=../shared
 STATIC_LIBPATHS=
 
 # Compiler flags
@@ -17,4 +17,4 @@ MEMCHECK_FLAGS=--track-origins=yes --log-file="memcheck.log"
 HELGRIND_FLAGS=--log-file="helgrind.log"
 
 # Libraries
-LIBS=commons
+LIBS=shared commons

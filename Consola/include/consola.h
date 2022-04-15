@@ -5,18 +5,14 @@
 #include <stdio.h>
 #include<commons/log.h>
 #include<commons/config.h>
-#include <sys/stat.h>
+#include <shared/utils.h>
+
 
 typedef struct nombre {
     char *ip_kernel;
     u_int16_t puerto_kernel;
 } t_nombre;
 
-/**
-* @NAME: esta_bien_definido_el_config
-* @DESC: chequea que el config este bien definido.
-*/
-bool esta_bien_definido_el_config(t_config* config);
 
 /**
 * @NAME: leer_config
