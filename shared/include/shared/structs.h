@@ -1,4 +1,5 @@
-
+#ifndef STRUCTS_H_
+#define STRUCTS_H_
 
 typedef enum
 {
@@ -17,3 +18,6 @@ typedef struct
 	op_code codigo_operacion;
 	t_buffer* buffer;
 } t_paquete;
+
+
+#endif
