@@ -74,7 +74,7 @@ void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre , int co
     log_destroy(logger);
     config_destroy(config);
     nombre_free(nombre);
-    liberar_conexion(conexion);
+    close(conexion);
 }
 
 void nombre_free(t_nombre* nombre){
