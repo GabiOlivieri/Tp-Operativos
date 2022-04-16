@@ -2,7 +2,7 @@
 
 
 int main(int argc, char** argv) {
-    t_log* logger = log_create("./consola.log","CONSOLA", false , LOG_LEVEL_ERROR);
+    t_log* logger = log_create("./consola.log","CONSOLA", false , LOG_LEVEL_TRACE);
     t_config* config = config_create("./consola.conf");
     t_nombre* nombre = malloc(sizeof(t_nombre));
     char* config_properties[] = {
@@ -24,8 +24,12 @@ int main(int argc, char** argv) {
     leer_file(argv[2],logger);
 
     leer_config(config , nombre);
+    
+    int conexion = crear_conexion(logger , "SERVER PLATA Y MIEDO NUNCA TUVE" , nombre->ip_kernel ,"8000");
 
-    liberar_memoria(logger , config , nombre);
+    enviar_mensaje("auto ricardo fort y rodrigo bueno" , conexion);
+
+    liberar_memoria(logger , config , nombre , conexion);
     return EXIT_SUCCESS;
 }
 
@@ -66,12 +70,12 @@ void leer_file(char* path,t_log* logger){
     free(file_contents);
 }
 
-void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre){
+void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre , int conexion){
     log_destroy(logger);
     config_destroy(config);
     nombre_free(nombre);
+    liberar_conexion(conexion);
 }
-
 
 void nombre_free(t_nombre* nombre){
     // free(nombre->ip_kernel); // no se porque sin esto me hace todo el free de una igual XD

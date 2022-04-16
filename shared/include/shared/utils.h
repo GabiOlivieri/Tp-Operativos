@@ -12,6 +12,10 @@
 */
 char* leer_archivo_completo(char*);
 
+/**
+* @NAME: config_has_all_properties
+* @DESC: se fija si el config contiene todas las propiedades pasadas como en array en el segundo paramtro.
+*/
 bool config_has_all_properties(t_config*, char**);
 
 #endif

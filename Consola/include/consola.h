@@ -3,10 +3,11 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include<commons/log.h>
-#include<commons/config.h>
+#include <commons/log.h>
+#include <commons/config.h>
 #include <shared/utils.h>
-
+#include <shared/socket.h>
+#include <shared/client.h>
 
 typedef struct nombre {
     char *ip_kernel;
@@ -16,7 +17,7 @@ typedef struct nombre {
 
 /**
 * @NAME: leer_config
-* @DESC: lee los datos del config y si falta alguno retorna false.
+* @DESC: lee los datos del config.
 */
 void leer_config(t_config* config, t_nombre* nombre);
 
@@ -30,7 +31,7 @@ void leer_file(char* path,t_log* logger);
 * @NAME: liberar_memoria
 * @DESC: libera la memoria usada en este modulo.
 */
-void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre);
+void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre , int conexion);
 
 /**
 * @NAME: nombre_free
