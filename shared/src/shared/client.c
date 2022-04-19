@@ -41,3 +41,9 @@ void * serializar_paquete(t_paquete* paquete, int bytes)
 
 	return magic;
 }
+
+void agregar_entero_a_paquete(t_paquete* paquete, int x){
+    paquete->buffer->stream = realloc(paquete->buffer->stream, paquete->buffer->size + sizeof(int));
+    memcpy(paquete->buffer->stream + paquete->buffer->size, &x, sizeof(int));
+    paquete->buffer->size += sizeof(int);   
+}

@@ -37,4 +37,9 @@ void* recibir_buffer(int* size, int socket_cliente);
 */
 t_list* recibir_paquete(int socket_cliente);
 
+/**
+* @NAME: leer_entero
+* @DESC: lee un entero en la posicion indicada existente en el buffer.
+*/
+int leer_entero(void * buffer, int desplazamiento);
 #endif

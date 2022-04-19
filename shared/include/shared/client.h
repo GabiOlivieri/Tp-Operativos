@@ -24,4 +24,10 @@ void eliminar_paquete(t_paquete* paquete);
 */
 void * serializar_paquete(t_paquete* paquete, int bytes);
 
+/**
+* @NAME: agregar_entero_a_paquete
+* @DESC: agrega un entero al buffer en el paquete.
+*/
+void agregar_entero_a_paquete(t_paquete* paquete, int x);
+
 #endif

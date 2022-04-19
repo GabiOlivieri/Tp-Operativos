@@ -56,3 +56,9 @@ t_list* recibir_paquete(int socket_cliente)
 	free(buffer);
 	return valores;
 }
+
+int leer_entero(void * buffer, int desplazamiento){
+    int leido;
+    memcpy(&leido, buffer + desplazamiento * sizeof(int) , sizeof(int));
+    return leido;
+}

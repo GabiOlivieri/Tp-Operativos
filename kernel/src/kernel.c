@@ -1,7 +1,8 @@
 #include<kernel.h>
 
 int main(int argc, char* argv[]) {
-    t_log* logger = log_create("/home/utnso/tp-2022-1c-Champagne-SO/kernel/kernel.log","KERNEL", false , LOG_LEVEL_TRACE);
+	///home/utnso/tp-2022-1c-Champagne-SO/kernel/kernel.log Harcodeada la ruta
+    t_log* logger = log_create("./kernel.log","KERNEL", false , LOG_LEVEL_TRACE);
     int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , "8000");
     int client_socket = esperar_cliente(logger , "un nombre" , servidor);
 
