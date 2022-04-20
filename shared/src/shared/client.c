@@ -47,3 +47,18 @@ void agregar_entero_a_paquete(t_paquete* paquete, int x){
     memcpy(paquete->buffer->stream + paquete->buffer->size, &x, sizeof(int));
     paquete->buffer->size += sizeof(int);   
 }
+
+t_paquete* crear_paquete(void){
+    t_paquete* paquete = malloc(sizeof(t_paquete));
+    paquete->codigo_operacion = PAQUETE;
+    paquete->buffer->size = 0;
+    paquete->buffer->stream = NULL;
+    return paquete;
+}
+
+void enviar_paquete(t_paquete* paquete, int socket_cliente){
+    int bytes = paquete->buffer->size + 2*sizeof(int);
+    void* a_enviar = serializar_paquete(paquete, bytes);
+    send(socket_cliente, a_enviar, bytes, 0);
+    free(a_enviar);
+}

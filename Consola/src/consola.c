@@ -26,8 +26,11 @@ int main(int argc, char** argv) {
     leer_config(config , nombre);
     
     int conexion = crear_conexion(logger , "SERVER PLATA Y MIEDO NUNCA TUVE" , nombre->ip_kernel ,"8000");
-
-    enviar_mensaje("auto ricardo fort y rodrigo bueno" , conexion);
+    t_paquete* paquete = crear_paquete();
+    paquete->codigo_operacion = INICIAR_PROCESO;
+    agregar_entero_a_paquete(paquete,1);
+    enviar_paquete(paquete,conexion);
+    //enviar_mensaje("auto ricardo fort y rodrigo bueno" , conexion);
 
     liberar_memoria(logger , config , nombre , conexion);
     return EXIT_SUCCESS;

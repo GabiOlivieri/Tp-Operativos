@@ -30,4 +30,7 @@ void * serializar_paquete(t_paquete* paquete, int bytes);
 */
 void agregar_entero_a_paquete(t_paquete* paquete, int x);
 
+t_paquete* crear_paquete(void);
+
+void enviar_paquete(t_paquete* paquete, int socket_cliente);
 #endif

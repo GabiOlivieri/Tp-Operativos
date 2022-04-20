@@ -14,13 +14,16 @@ int main(int argc, char* argv[]) {
 			recibir_mensaje(client_socket , logger);
 			break;
 		case PAQUETE:
-			lista = recibir_paquete(client_socket);
 			log_info(logger, "Me llegaron los siguientes valores:\n");
 			// list_iterate(lista, (void*) iterator);
 			break;
 		
 		case INICIAR_PROCESO:
 			log_info(logger, "Me llego un INICIAR_PROCESO\n");
+			int size;
+   			char * buffer = recibir_buffer(&size, client_socket);
+			int x = leer_entero(buffer,0);
+			log_info(logger, "Me llego un entero %d\n",x);
 			// TO DO -> crearProceso
 			break;
 		
