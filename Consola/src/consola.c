@@ -55,6 +55,7 @@ void leer_file(char* path,t_log* logger){
 
             if (strcmp(token, "NO_OP") == 0){
             	for(int i=0;i<=5;i++){
+                    //agregar_entero_a _paquete(NO_OP)
             		printf("NO_OP\n");
             	}
             }else{

@@ -18,6 +18,10 @@ int main(int argc, char* argv[]) {
 			log_info(logger, "Me llegaron los siguientes valores:\n");
 			// list_iterate(lista, (void*) iterator);
 			break;
+		/*
+		case INICIAR_PROCESO:
+			break;
+		*/
 		case -1:
 			log_error(logger, "el cliente se desconecto. Terminando servidor");
 			return EXIT_FAILURE;

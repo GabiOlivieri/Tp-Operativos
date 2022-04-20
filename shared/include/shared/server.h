@@ -42,4 +42,11 @@ t_list* recibir_paquete(int socket_cliente);
 * @DESC: lee un entero en la posicion indicada existente en el buffer.
 */
 int leer_entero(void * buffer, int desplazamiento);
+
+/**
+* @NAME: recibir_buffer
+* @DESC: extrae buffer del paquete.
+*/
+void* recibir_buffer(int* size, int socket_cliente)
+
 #endif
