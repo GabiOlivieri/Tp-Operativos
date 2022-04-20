@@ -43,10 +43,5 @@ t_list* recibir_paquete(int socket_cliente);
 */
 int leer_entero(void * buffer, int desplazamiento);
 
-/**
-* @NAME: recibir_buffer
-* @DESC: extrae buffer del paquete.
-*/
-void* recibir_buffer(int* size, int socket_cliente)
 
 #endif
