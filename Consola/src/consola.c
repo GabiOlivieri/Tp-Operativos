@@ -26,9 +26,9 @@ int main(int argc, char** argv) {
 
     leer_config(config , nombre);
     
-    int conexion = crear_conexion(logger , "SERVER PLATA Y MIEDO NUNCA TUVE" , nombre->ip_kernel ,"8000");
+    int conexion = crear_conexion(logger , "Server Kernel" , nombre->ip_kernel ,"8000");
 
-    enviar_mensaje("auto ricardo fort y rodrigo bueno" , conexion);
+    enviar_mensaje("Mensaje de prueba 123" , conexion);
 
     liberar_memoria(logger , config , nombre , conexion);
     return EXIT_SUCCESS;
@@ -54,20 +54,24 @@ void leer_file(char* path,t_log* logger){
 
     while ((token = strtok_r(rest, "\n", &rest))){
 
-            if (strcmp(token, "NO_OP") == 0){
-            	for(int i=0;i<=5;i++){
-                    //agregar_entero_a _paquete(NO_OP)
-            		printf("NO_OP\n");
-            	}
-            }else{
             	param = strtok_r(token, " ", &token);
-            	printf("%s ", param);
+            	if (strcmp(param, "NO_OP") == 0) {
+            		argumentos = strtok_r(token, " ", &token);
+
+            		            	for(int i = 0;i <= atoi(argumentos); i++){
+            		            		printf("%s \n", "NO_OP");
+            		            	}
+
+            	}else{
+            		printf("%s ", param);
 
              while((argumentos = strtok_r(token, " ", &token)))
             	 printf("%d ", atoi(argumentos));
+             printf("\n");
+            	}
+
             }
-            printf("\n");
-    }
+
 
     free(file_contents);
 }
