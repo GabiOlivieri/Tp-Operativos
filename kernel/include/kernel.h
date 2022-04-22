@@ -15,7 +15,7 @@ typedef struct configuraciones {
     char *ip_cpu;
     u_int16_t puerto_cpu_dispatch;
     u_int16_t puerto_cpu_interrupt;
-    u_int16_t puerto_escucha;
+    char *puerto_escucha;
     char *algoritmo_planificacion;
     u_int16_t estimacion_inicial;
     double alfa;
