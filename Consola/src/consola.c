@@ -5,6 +5,7 @@ int main(int argc, char** argv) {
     t_log* logger = log_create("./consola.log","CONSOLA", false , LOG_LEVEL_TRACE);
     t_config* config = config_create("./consola.conf");
     t_nombre* nombre = malloc(sizeof(t_nombre));
+
     char* config_properties[] = {
         "IP_KERNEL",
         "PUERTO_KERNEL",
