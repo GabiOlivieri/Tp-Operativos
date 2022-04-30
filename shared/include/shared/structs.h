@@ -5,7 +5,8 @@ typedef enum
 {
 	MENSAJE,
 	PAQUETE,
-	INICIAR_PROCESO
+	INICIAR_PROCESO,
+	DESCONEXION=-1
 }op_code;
 
 typedef enum
