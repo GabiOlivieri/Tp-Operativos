@@ -49,11 +49,15 @@ void agregar_entero_a_paquete(t_paquete* paquete, int x){
 }
 
 t_paquete* crear_paquete(void){
-    t_paquete* paquete = malloc(sizeof(t_paquete));
-    paquete->codigo_operacion = PAQUETE;
-    paquete->buffer->size = 0;
-    paquete->buffer->stream = NULL;
-    return paquete;
+	t_paquete* paquete = malloc(sizeof(t_paquete));
+	paquete->codigo_operacion = PAQUETE;
+	crear_buffer(paquete);
+	return paquete;
+}
+void crear_buffer(t_paquete* paquete){
+	paquete->buffer = malloc(sizeof(t_buffer));
+	paquete->buffer->size = 0;
+	paquete->buffer->stream = NULL;
 }
 
 void enviar_paquete(t_paquete* paquete, int socket_cliente){
