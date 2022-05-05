@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
 
     leer_config(config,configuraciones);
 
-    int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , "8000");
+    int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
     int client_socket = esperar_cliente(logger , "un nombre" , servidor);
 
 	t_list* lista;
@@ -64,7 +64,7 @@ void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->ip_cpu = config_get_string_value(config , "IP_CPU");
 	configuraciones->puerto_cpu_dispatch = config_get_int_value(config , "PUERTO_CPU_DISPATCH");
 	configuraciones->puerto_cpu_interrupt = config_get_int_value(config , "PUERTO_CPU_INTERRUPT");
-	configuraciones->puerto_escucha = config_get_int_value(config , "PUERTO_ESCUCHA");
+	configuraciones->puerto_escucha = config_get_string_value(config , "PUERTO_ESCUCHA");
 	configuraciones->algoritmo_planificacion = config_get_string_value(config , "ALGORITMO_PLANIFICACION");
 	configuraciones->estimacion_inicial = config_get_int_value(config , "ESTIMACION_INICIAL");
 	configuraciones->alfa = config_get_double_value(config , "ALFA");
