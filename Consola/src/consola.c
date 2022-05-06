@@ -52,23 +52,25 @@ t_list* leer_file(char* path,t_log* logger){
     t_list* lista = list_create();
     
     while ((token = strtok_r(rest, "\n", &rest))){
-
-            if (strcmp(token, "NO_OP") == 0){
-            	for(int i=0;i<=5;i++){
-            		printf("NO_OP\n");
-                    list_add(lista,0);    
+        param = strtok_r(token," ",&token);
+            if (strcmp(param, "NO_OP") == 0) {
+            	argumentos = strtok_r(token, " ", &token);	
+                for(int i = 0;i < atoi(argumentos); i++){
+            	    printf("%s \n", "NO_OP");
+                    list_add(lista,0);
             	}
             }else{
-            	param = strtok_r(token, " ", &token);
                 //TO DO -> SWITCHEAR POR IDENTIFICADOR Y AGREGAR EL CORRECTO
                 list_add(lista,0);
-            	printf("%s ", param);
-             while((argumentos = strtok_r(token, " ", &token)))
+                printf("%s ", param);
+
+             while((argumentos = strtok_r(token, " ", &token))){
                 //TO DO -> CASTEAR PARAMETROS A ENTEROS Y AGREGARLOS
                 //list_add(lista,arg_enteros);
             	 printf("%d ", atoi(argumentos));
-            }
+             }
             printf("\n");
+            }
     }
     free(file_contents);
     return lista;

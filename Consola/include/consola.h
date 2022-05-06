@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <commons/log.h>
 #include <commons/config.h>
+#include <commons/collections/list.h>
 #include <shared/utils.h>
 #include <shared/socket.h>
 #include <shared/client.h>
