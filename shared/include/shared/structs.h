@@ -39,8 +39,26 @@ typedef struct
     int pc;
     t_list* lista_instrucciones;
     int tabla_paginas; //Inchequeable
-    int estimacion_inicial;
+    int estimacion_rafaga;
     float alfa;
 }t_pcb;
+
+typedef struct
+{
+    int identificador;
+}ins_sin_parametro;
+
+typedef struct
+{
+    int identificador;
+    int parametro;
+}ins_con_parametro;
+
+typedef struct
+{
+    int identificador;
+    int parametro1;
+    int parametro2;
+}ins_con_dos_parametros;
 
 #endif

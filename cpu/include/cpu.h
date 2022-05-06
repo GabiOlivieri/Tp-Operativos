@@ -35,6 +35,12 @@ void leer_config(t_config* config, t_configuraciones* configuraciones);
 void leer_file(char* path,t_log* logger);
 
 /**
+* @NAME: decodificar_instrucciones
+* @DESC: lee los datos del paquete e interpreta las instrucciones para almacenarlas.
+*/
+t_list* decodificar_instrucciones(char* buffer);
+
+/**
 * @NAME: liberar_memoria
 * @DESC: libera la memoria usada en este modulo.
 */
