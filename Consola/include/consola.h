@@ -37,7 +37,7 @@ void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre);
 * @NAME: liberar_memoria
 * @DESC: libera la memoria usada en este modulo.
 */
-void liberar_memoria(t_log* logger, t_config* config , t_nombre* nombre);
+void liberar_memoria(t_log* logger, t_nombre* nombre);
 
 /**
 * @NAME: nombre_free
