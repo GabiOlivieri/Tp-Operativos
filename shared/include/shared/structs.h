@@ -1,14 +1,19 @@
 #ifndef STRUCTS_H_
 #define STRUCTS_H_
 
+<<<<<<< HEAD
 #include <commons/collections/list.h>
+=======
+#include<commons/collections/list.h>
+
+>>>>>>> ce3b8dc84345cb1210380625b1c1951615379207
 
 typedef enum
 {
 	MENSAJE,
 	PAQUETE,
 	INICIAR_PROCESO
-}op_code;
+} op_code;
 
 typedef enum
 {
@@ -18,7 +23,7 @@ typedef enum
 	WRITE,
 	COPY,
 	EXIT
-}op_ins;
+} op_ins;
 
 typedef struct
 {

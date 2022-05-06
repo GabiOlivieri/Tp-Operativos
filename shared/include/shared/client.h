@@ -30,4 +30,17 @@ void * serializar_paquete(t_paquete* paquete, int bytes);
 */
 void agregar_entero_a_paquete(t_paquete* paquete, int x);
 
+/**
+* @NAME: crear_paquete
+* @DESC: Crea un paquete con un buffer vacio
+*/
+t_paquete* crear_paquete(void);
+
+/**
+* @NAME: crear_buffer
+* @DESC: Crea un buffer vacio
+*/
+void crear_buffer(t_paquete* paquete);
+
+void enviar_paquete(t_paquete* paquete, int socket_cliente);
 #endif
