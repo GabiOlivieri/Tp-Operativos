@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
 			int x = leer_entero(buffer,0);
 			int y = leer_entero(buffer,1);
 			log_info(logger, "Me llego un entero %d\n",x);
-			//log_info(logger, "Me llego un entero %d\n",y);
+			log_info(logger, "Me llego un entero %d\n",y);
 
 			// TO DO -> crearProceso
 			break;

@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
     enviar_instrucciones(lista,logger,nombre);
     list_destroy(lista);
 
-    liberar_memoria(logger , nombre);
+    liberar_memoria(logger , nombre, config);
     return EXIT_SUCCESS;
 }
 
@@ -90,7 +90,7 @@ void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre){
 }
 
 
-void liberar_memoria(t_log* logger, t_nombre* nombre){
+void liberar_memoria(t_log* logger, t_nombre* nombre, t_config* config){
     log_destroy(logger);
     config_destroy(config);
     nombre_free(nombre);
