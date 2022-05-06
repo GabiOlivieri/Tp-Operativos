@@ -1,6 +1,8 @@
 #ifndef STRUCTS_H_
 #define STRUCTS_H_
 
+#include <commons/collections/list.h>
+
 typedef enum
 {
 	MENSAJE,
