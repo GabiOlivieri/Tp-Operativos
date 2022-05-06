@@ -34,11 +34,6 @@ void leer_config(t_config* config, t_configuraciones* configuraciones);
 */
 void leer_file(char* path,t_log* logger);
 
-/**
-* @NAME: decodificar_instrucciones
-* @DESC: lee los datos del paquete e interpreta las instrucciones para almacenarlas.
-*/
-t_list* decodificar_instrucciones(char* buffer);
 
 /**
 * @NAME: liberar_memoria
@@ -51,5 +46,13 @@ void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* config
 * @DESC: libera la memoria usada de nombre structura para almacenar los valores obtenidos del config.
 */
 void nombre_free(t_configuraciones* configuraciones);
+
+t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
+
+t_pcb* recibir_pcb(char* buffer);
+
+int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones);
+
+int hay_interrupcion();
 
 #endif

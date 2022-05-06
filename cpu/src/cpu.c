@@ -26,14 +26,21 @@ int main(int argc, char* argv[]) {
     			break;
     		case PAQUETE:
     			log_info(logger, "Me llegaron los siguientes valores:\n");
-    			// list_iterate(lista, (void*) iterator);
     			break;
 
     		case INICIAR_PROCESO:
     			log_info(logger, "Me llego un INICIAR_PROCESO\n");
+    			int instruccion;
     			int size;
        			char * buffer = recibir_buffer(&size, client_socket);
-    			ejecutar_instruccion(buffer);
+       			t_pcb* pcb = recibir_pcb(buffer);
+       			while (!hay_interrupcion() && instruccion != EXIT){
+    			instruccion = ejecutar_instruccion(pcb,configuraciones);
+
+    			if (instruccion == IO){
+    				printf("Lo devuelvo con el tiempo de bloqueo\n");
+    			}
+       			}
     			break;
 
     		case -1:
@@ -49,74 +56,114 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-void ejecutar_instruccion(char* buffer){
+int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones){
 		printf("Ejecuta instrucción\n");
-		t_list* lista = list_create();
-		int pcbid = leer_entero(buffer,0);
-		printf("El id de pcb recibido es: %d\n",pcbid);
-		int cantidad_enteros = leer_entero(buffer,1);
-		printf("La cantidad de enteros es: %d\n",cantidad_enteros);
-		for(int i = 2; i <= cantidad_enteros;i++){
-			int x = leer_entero(buffer,i);
-			void* id = malloc(sizeof(int));
-			id = (void*)(&x);
-			if(x==NO_OP){
-				printf("Me llego un %d por lo que es un NO_OP\n",x);
-				list_add(lista,id);
-			}else if(x==IO){
-				printf("Me llego un %d por lo que es un IO\n",x);
-				list_add(lista,id);
-				i++;
-				int y = leer_entero(buffer,i);
-				void* parametro = malloc(sizeof(int));
-				parametro = (void*)(&y);
-				printf("Me llego un parametro: %d \n",y);
-				list_add(lista,parametro);
-			}else if(x==READ){
-				printf("Me llego un %d por lo que es un READ\n",x);
-				list_add(lista,id);
-				i++;
-				int y = leer_entero(buffer,i);
-				void* parametro = malloc(sizeof(int));
-				parametro = (void*)(&y);
-				printf("Me llego un parametro: %d \n",y);
-				list_add(lista,parametro);
-			}else if(x==WRITE){
-				printf("Me llego un %d por lo que es un WRITE\n",x);
-				list_add(lista,id);
-				i++;
-				int y = leer_entero(buffer,i);
-				void* parametro = malloc(sizeof(int));
-				parametro = (void*)(&y);
-				printf("Me llego un parametro: %d \n",y);
-				list_add(lista,parametro);
-				i++;
-				int z = leer_entero(buffer,i);
-				void* parametro1 = malloc(sizeof(int));
-				parametro1 = (void*)(&z);
-				printf("Me llego un parametro: %d \n",z);
-				list_add(lista,parametro1);
-			}else if(x==COPY){
-				printf("Me llego un %d por lo que es un COPY\n",x);
-				list_add(lista,id);
-				i++;
-				int y = leer_entero(buffer,i);
-				void* parametro = malloc(sizeof(int));
-				parametro = (void*)(&y);
-				printf("Me llego un parametro: %d \n",y);
-				list_add(lista,parametro);
-				i++;
-				int z = leer_entero(buffer,i);
-				void* parametro1 = malloc(sizeof(int));
-				parametro1 = (void*)(&z);
-				printf("Me llego un parametro: %d \n",z);
-				list_add(lista,parametro1);
-			}else if(x==EXIT){
-				printf("Me llego un %d por lo que es un EXIT\n",x);
-				list_add(lista,id);
-			}
+		int x = list_get(pcb->lista_instrucciones,pcb->pc);
+		if (x==NO_OP) {
+			printf("Llegó un NO_OP %d\n",x);
+			sleep(configuraciones->retardo_NOOP);
 		}
+		else if (x==IO){
+			printf("Llegó un IO %d\n",x);
+			pcb->pc++;
+			int y = list_get(pcb->lista_instrucciones,pcb->pc);
+			printf("El argumento recibido es %d\n",y);
+		}
+		else if (x==EXIT) return x;
+		pcb->pc++;
+		return x;
 
+}
+
+void devolver_pcb(){
+
+}
+
+
+int hay_interrupcion(){
+	// Aća va toda la logica cuando llega una interrupción para que devuelva un true
+	return 0;
+}
+
+t_pcb* recibir_pcb(char* buffer){
+	t_pcb* pcb = malloc(sizeof(t_pcb));
+	pcb->pid = leer_entero(buffer,0); //Variable global que se incrementa
+	printf("El id de pcb recibido es: %d\n",pcb->pid);
+	pcb->pc = leer_entero(buffer,1);
+	printf("El pc recibido es: %d\n",pcb->pc);
+
+	pcb->lista_instrucciones = obtener_lista_instrucciones(buffer,pcb);
+
+	printf("El pc recibido es: %d\n",pcb->pc);
+	return pcb;
+}
+
+
+
+t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb){
+	t_list* lista = list_create();
+			int aux = pcb->pc + 3;
+			int cantidad_enteros = 3 + leer_entero(buffer,2);
+			printf("La cantidad de enteros es: %d\n",cantidad_enteros);
+			for(; aux <= cantidad_enteros;aux++){
+				int x = leer_entero(buffer,aux);
+				void* id = malloc(sizeof(int));
+				id = (void*)(&x);
+				if(x==NO_OP){
+					printf("Me llego un %d por lo que es un NO_OP\n",x);
+					list_add(lista,0);
+				}else if(x==IO){
+					printf("Me llego un %d por lo que es un IO\n",x);
+					list_add(lista,1);
+					aux++;
+					int y = leer_entero(buffer,aux);
+					printf("Me llego un parametro: %d \n",y);
+					list_add(lista,y);
+				}else if(x==READ){
+					printf("Me llego un %d por lo que es un READ\n",x);
+					list_add(lista,id);
+					aux++;
+					int y = leer_entero(buffer,aux);
+					void* parametro = malloc(sizeof(int));
+					parametro = (void*)(&y);
+					printf("Me llego un parametro: %d \n",y);
+					list_add(lista,parametro);
+				}else if(x==WRITE){
+					printf("Me llego un %d por lo que es un WRITE\n",x);
+					list_add(lista,id);
+					aux++;
+					int y = leer_entero(buffer,aux);
+					void* parametro = malloc(sizeof(int));
+					parametro = (void*)(&y);
+					printf("Me llego un parametro: %d \n",y);
+					list_add(lista,parametro);
+					aux++;
+					int z = leer_entero(buffer,aux);
+					void* parametro1 = malloc(sizeof(int));
+					parametro1 = (void*)(&z);
+					printf("Me llego un parametro: %d \n",z);
+					list_add(lista,parametro1);
+				}else if(x==COPY){
+					printf("Me llego un %d por lo que es un COPY\n",x);
+					list_add(lista,id);
+					aux++;
+					int y = leer_entero(buffer,aux);
+					void* parametro = malloc(sizeof(int));
+					parametro = (void*)(&y);
+					printf("Me llego un parametro: %d \n",y);
+					list_add(lista,parametro);
+					aux++;
+					int z = leer_entero(buffer,aux);
+					void* parametro1 = malloc(sizeof(int));
+					parametro1 = (void*)(&z);
+					printf("Me llego un parametro: %d \n",z);
+					list_add(lista,parametro1);
+				}else if(x==EXIT){
+					printf("Me llego un %d por lo que es un EXIT\n",x);
+					list_add(lista,5);
+				}
+			}
+			return lista;
 }
 
 

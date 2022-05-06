@@ -75,16 +75,14 @@ t_list* decodificar_instrucciones(char* buffer){
 		id = (void*)(&x);
 		if(x==NO_OP){
 			printf("Me llego un %d por lo que es un NO_OP\n",x);
-			list_add(lista,id);
+			list_add(lista,0);
 		}else if(x==IO){
 			printf("Me llego un %d por lo que es un IO\n",x);
-			list_add(lista,id);
+			list_add(lista,1);
 			i++;
 			int y = leer_entero(buffer,i);
-			void* parametro = malloc(sizeof(int));
-			parametro = (void*)(&y);
 			printf("Me llego un parametro: %d \n",y);
-			list_add(lista,parametro);
+			list_add(lista,y);
 		}else if(x==READ){
 			printf("Me llego un %d por lo que es un READ\n",x);
 			list_add(lista,id);
@@ -126,7 +124,7 @@ t_list* decodificar_instrucciones(char* buffer){
 			list_add(lista,parametro1);
 		}else if(x==EXIT){
 			printf("Me llego un %d por lo que es un EXIT\n",x);
-			list_add(lista,id);
+			list_add(lista,5);
 		}
 	}
 	return lista; 
@@ -148,6 +146,7 @@ void enviar_pcb(t_pcb* pcb, t_log* logger,t_configuraciones* configuraciones){
     int cantidad_enteros = list_size(pcb->lista_instrucciones);
     printf("El process enviado a cpu es: %d\n",pcb->pid);
     agregar_entero_a_paquete(paquete,pcb->pid);
+    agregar_entero_a_paquete(paquete,pcb->pc);
     agregar_entero_a_paquete(paquete,cantidad_enteros);
     t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
     while(list_iterator_has_next(iterator)){
