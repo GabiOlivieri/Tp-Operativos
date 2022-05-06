@@ -6,7 +6,6 @@ int main(int argc, char** argv) {
     t_config* config = config_create("./consola.conf");
     t_nombre* nombre = malloc(sizeof(t_nombre));
     
-
     char* config_properties[] = {
         "IP_KERNEL",
         "PUERTO_KERNEL",
@@ -23,14 +22,12 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    
     leer_config(config , nombre);
 
     t_list* lista = leer_file(argv[2],logger);
     enviar_instrucciones(lista,logger,nombre);
     list_destroy(lista);
 
-    config_destroy(config);
     liberar_memoria(logger , nombre);
     return EXIT_SUCCESS;
 }
@@ -59,18 +56,20 @@ t_list* leer_file(char* path,t_log* logger){
             if (strcmp(token, "NO_OP") == 0){
             	for(int i=0;i<=5;i++){
             		printf("NO_OP\n");
+                    list_add(lista,0);    
             	}
             }else{
             	param = strtok_r(token, " ", &token);
+                //TO DO -> SWITCHEAR POR IDENTIFICADOR Y AGREGAR EL CORRECTO
                 list_add(lista,0);
             	printf("%s ", param);
-
              while((argumentos = strtok_r(token, " ", &token)))
+                //TO DO -> CASTEAR PARAMETROS A ENTEROS Y AGREGARLOS
+                //list_add(lista,arg_enteros);
             	 printf("%d ", atoi(argumentos));
             }
             printf("\n");
     }
-    //while exista siguiente nodo en la lista voy agregando a paquete
     free(file_contents);
     return lista;
 }
@@ -87,16 +86,14 @@ void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre){
     int conexion = crear_conexion(logger , "SERVER PLATA Y MIEDO NUNCA TUVE" , nombre->ip_kernel ,"8000");
     enviar_paquete(paquete,conexion);
     eliminar_paquete(paquete);
-    close(conexion);
-    
+    close(conexion);   
 }
 
 
 void liberar_memoria(t_log* logger, t_nombre* nombre){
     log_destroy(logger);
-    //config_destroy(config);
+    config_destroy(config);
     nombre_free(nombre);
-    //close(conexion);
 }
 
 void nombre_free(t_nombre* nombre){
