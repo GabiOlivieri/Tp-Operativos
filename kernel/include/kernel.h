@@ -24,6 +24,17 @@ typedef struct configuraciones {
 } t_configuraciones;
 
 /**
+* @NAME: decodificar_instrucciones
+* @DESC: lee los datos del paquete e interpreta las instrucciones para almacenarlas.
+*/
+t_list* decodificar_instrucciones(char* buffer);
+
+/**
+* @NAME: crear_pcb
+* @DESC: crea los pcb usando la lista de instrucciones y las configuraciones
+*/
+t_pcb* crear_pcb(t_list* lista,t_configuraciones* configuraciones);
+/**
 * @NAME: leer_config
 * @DESC: lee los datos del config.
 */

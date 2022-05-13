@@ -43,12 +43,11 @@ int main(int argc, char* argv[]) {
 			log_info(logger, "Me llego un INICIAR_PROCESO\n");
 			int size;
    			char * buffer = recibir_buffer(&size, client_socket);
-			int x = leer_entero(buffer,0);
-			int y = leer_entero(buffer,1);
-			log_info(logger, "Me llego un entero %d\n",x);
-			log_info(logger, "Me llego un entero %d\n",y);
-
-			// TO DO -> crearProceso
+			t_list* lista = list_create();
+			lista = decodificar_instrucciones(buffer);
+			t_pcb* pcb = crear_pcb(lista,configuraciones);
+			printf("El process id es: %d\n",pcb->pid);
+			free(pcb);
 			break;
 		
 		case -1:
@@ -62,6 +61,84 @@ int main(int argc, char* argv[]) {
     liberar_memoria(logger,config,configuraciones,servidor);
 
     return 0;
+}
+
+t_list* decodificar_instrucciones(char* buffer){
+	printf("Arranca decodificacion\n");
+	t_list* lista = list_create();
+	int cantidad_enteros = leer_entero(buffer,0);
+	printf("La cantidad de enteros es: %d\n",cantidad_enteros);
+	for(int i = 1; i <= cantidad_enteros;i++){
+		int x = leer_entero(buffer,i);
+		void* id = malloc(sizeof(int));
+		id = (void*)(&x);
+		if(x==NO_OP){
+			printf("Me llego un %d por lo que es un NO_OP\n",x);
+			list_add(lista,id);
+		}else if(x==IO){
+			printf("Me llego un %d por lo que es un IO\n",x);
+			list_add(lista,id);
+			i++;
+			int y = leer_entero(buffer,i);
+			void* parametro = malloc(sizeof(int));
+			parametro = (void*)(&y);
+			printf("Me llego un parametro: %d \n",y);
+			list_add(lista,parametro);
+		}else if(x==READ){
+			printf("Me llego un %d por lo que es un READ\n",x);
+			list_add(lista,id);
+			i++;
+			int y = leer_entero(buffer,i);
+			void* parametro = malloc(sizeof(int));
+			parametro = (void*)(&y);
+			printf("Me llego un parametro: %d \n",y);
+			list_add(lista,parametro);
+		}else if(x==WRITE){
+			printf("Me llego un %d por lo que es un WRITE\n",x);
+			list_add(lista,id);
+			i++;
+			int y = leer_entero(buffer,i);
+			void* parametro = malloc(sizeof(int));
+			parametro = (void*)(&y);
+			printf("Me llego un parametro: %d \n",y);
+			list_add(lista,parametro);
+			i++;
+			int z = leer_entero(buffer,i);
+			void* parametro1 = malloc(sizeof(int));
+			parametro1 = (void*)(&z);
+			printf("Me llego un parametro: %d \n",z);
+			list_add(lista,parametro1);
+		}else if(x==COPY){
+			printf("Me llego un %d por lo que es un COPY\n",x);
+			list_add(lista,id);
+			i++;
+			int y = leer_entero(buffer,i);
+			void* parametro = malloc(sizeof(int));
+			parametro = (void*)(&y);
+			printf("Me llego un parametro: %d \n",y);
+			list_add(lista,parametro);
+			i++;
+			int z = leer_entero(buffer,i);
+			void* parametro1 = malloc(sizeof(int));
+			parametro1 = (void*)(&z);
+			printf("Me llego un parametro: %d \n",z);
+			list_add(lista,parametro1);
+		}else if(x==EXIT){
+			printf("Me llego un %d por lo que es un EXIT\n",x);
+			list_add(lista,id);
+		}
+	}
+	return lista; 
+}
+t_pcb* crear_pcb(t_list* lista,t_configuraciones* configuraciones){
+	t_pcb* pcb = malloc(sizeof(t_pcb));
+	pcb->pid = 1; //Variable global que se incrementa
+	pcb->pc = 0;
+	pcb->lista_instrucciones = lista;
+	// pedir a memoria la tabla y asignarla
+	pcb->estimacion_inicial = configuraciones->estimacion_inicial;
+	pcb->alfa = configuraciones->alfa;
+	return pcb;
 }
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){

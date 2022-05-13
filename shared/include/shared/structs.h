@@ -1,8 +1,7 @@
 #ifndef STRUCTS_H_
 #define STRUCTS_H_
 
-#include<commons/collections/list.h>
-
+#include <commons/collections/list.h>
 
 typedef enum
 {
@@ -40,26 +39,8 @@ typedef struct
     int pc;
     t_list* lista_instrucciones;
     int tabla_paginas; //Inchequeable
-    int estimacion_rafaga;
+    int estimacion_inicial;
     float alfa;
 }t_pcb;
-
-typedef struct
-{
-    int identificador;
-}ins_sin_parametro;
-
-typedef struct
-{
-    int identificador;
-    int parametro;
-}ins_con_parametro;
-
-typedef struct
-{
-    int identificador;
-    int parametro1;
-    int parametro2;
-}ins_con_dos_parametros;
 
 #endif
