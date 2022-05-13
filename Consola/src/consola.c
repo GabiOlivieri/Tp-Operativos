@@ -59,18 +59,27 @@ t_list* leer_file(char* path,t_log* logger){
             	    printf("%s \n", "NO_OP");
                     list_add(lista,0);
             	}
-            }else{
-                //TO DO -> SWITCHEAR POR IDENTIFICADOR Y AGREGAR EL CORRECTO
-                list_add(lista,0);
-                printf("%s ", param);
-
-             while((argumentos = strtok_r(token, " ", &token))){
-                //TO DO -> CASTEAR PARAMETROS A ENTEROS Y AGREGARLOS
-                //list_add(lista,arg_enteros);
-            	 printf("%d ", atoi(argumentos));
-             }
-            printf("\n");
+            }else if(strcmp(param,"I/O") == 0){
+                    list_add(lista,1);
+            }else if(strcmp(param,"READ") == 0){
+                    list_add(lista,2);
+            }else if(strcmp(param,"WRITE") == 0){
+                    list_add(lista,3);
+            }else if(strcmp(param,"COPY") == 0){
+                    list_add(lista,4);
+            }else if(strcmp(param,"EXIT") == 0){
+                    list_add(lista,5);
+            }else {
+                    printf("%s \n", "No se pudo identificar la instruccion");
+                    continue;
+            }                              
+            printf("%s ", param);
+            while((argumentos = strtok_r(token, " ", &token))){
+                int arg_enteros = atoi(argumentos);
+                list_add(lista,arg_enteros);
+            	printf("%d ", arg_enteros);
             }
+        printf("\n");            
     }
     free(file_contents);
     return lista;
