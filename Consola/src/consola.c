@@ -87,6 +87,9 @@ t_list* leer_file(char* path,t_log* logger){
 void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre){
     t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = INICIAR_PROCESO;
+    int cantidad_enteros = list_size(lista);
+    printf("La cantidad de enteros es: %d\n",cantidad_enteros);
+    agregar_entero_a_paquete(paquete,cantidad_enteros);
     t_list_iterator* iterator = list_iterator_create(lista);
     while(list_iterator_has_next(iterator)){
         int ins = list_iterator_next(iterator);
