@@ -66,9 +66,12 @@ int main(int argc, char* argv[]) {
 t_list* decodificar_instrucciones(char* buffer){
 	printf("Arranca decodificacion\n");
 	t_list* lista = list_create();
-	int cantidad_enteros = leer_entero(buffer,0);
+	int tamanio_proceso = leer_entero(buffer,0);
+	printf("El tamaño del proceso es: %d\n",tamanio_proceso);
+	int cantidad_enteros = leer_entero(buffer,1);
 	printf("La cantidad de enteros es: %d\n",cantidad_enteros);
-	for(int i = 1; i <= cantidad_enteros;i++){
+	cantidad_enteros++;
+	for(int i = 2; i <= cantidad_enteros;i++){
 		int x = leer_entero(buffer,i);
 		void* id = malloc(sizeof(int));
 		id = (void*)(&x);
