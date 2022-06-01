@@ -1,5 +1,7 @@
 #include<kernel.h>
 
+int pid = 0;
+
 int main(int argc, char* argv[]) {
 	///home/utnso/tp-2022-1c-Champagne-SO/kernel/kernel.log Harcodeada la ruta
     t_log* logger = log_create("./kernel.log","KERNEL", false , LOG_LEVEL_TRACE);
@@ -43,9 +45,7 @@ int main(int argc, char* argv[]) {
 			log_info(logger, "Me llego un INICIAR_PROCESO\n");
 			int size;
    			char * buffer = recibir_buffer(&size, client_socket);
-			t_list* lista = list_create();
-			lista = decodificar_instrucciones(buffer);
-			t_pcb* pcb = crear_pcb(lista,configuraciones);
+			t_pcb* pcb  = crear_pcb(buffer,configuraciones);
 			printf("El process id es: %d\n",pcb->pid);
 			free(pcb);
 			break;
@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-t_list* decodificar_instrucciones(char* buffer){
+t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones){
 	printf("Arranca decodificacion\n");
 	t_list* lista = list_create();
 	int tamanio_proceso = leer_entero(buffer,0);
@@ -131,18 +131,17 @@ t_list* decodificar_instrucciones(char* buffer){
 			list_add(lista,id);
 		}
 	}
-	return lista; 
-}
-t_pcb* crear_pcb(t_list* lista,t_configuraciones* configuraciones){
 	t_pcb* pcb = malloc(sizeof(t_pcb));
-	pcb->pid = 1; //Variable global que se incrementa
+	pcb->pid = pid++; //Variable global que se incrementa
+	pcb->size = tamanio_proceso;
 	pcb->pc = 0;
 	pcb->lista_instrucciones = lista;
 	// pedir a memoria la tabla y asignarla
 	pcb->estimacion_inicial = configuraciones->estimacion_inicial;
 	pcb->alfa = configuraciones->alfa;
-	return pcb;
+	return pcb; 
 }
+
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->ip_memoria = config_get_string_value(config , "IP_MEMORIA");
