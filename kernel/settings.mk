@@ -18,4 +18,4 @@ HELGRIND_FLAGS=--log-file="helgrind.log"
 
 
 # Libraries
-LIBS=shared commons
+LIBS=shared commons pthread

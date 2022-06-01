@@ -7,6 +7,7 @@
 #include <shared/structs.h>
 #include<commons/collections/list.h>
 
+
 /**
 * @NAME: recibir_operacion
 * @DESC: recibe la operacion que debe hacer desde el cliente.

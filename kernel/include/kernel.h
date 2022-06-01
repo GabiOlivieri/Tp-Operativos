@@ -8,6 +8,7 @@
 #include <shared/server.h>
 #include <commons/collections/list.h>
 #include <commons/config.h>
+#include <pthread.h>
 
 typedef struct configuraciones {
     char *ip_memoria;
@@ -23,11 +24,25 @@ typedef struct configuraciones {
     u_int16_t tiempo_max_bloqueado;
 } t_configuraciones;
 
+t_configuraciones* configuraciones;
+t_log* logger;
+
 /**
 * @NAME: crear_pcb
 * @DESC: lee los datos del paquete e interpreta las instrucciones para crear el pcb correspondiente
 */
 t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones);
+
+/**
+* @NAME: manejar_conexion
+* @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
+*/
+void manejar_conexion(int server_fd);
+
+
+void atender_cliente(int client_socket);
+
+void iniciar_proceso(int client_socket);
 
 /**
 * @NAME: leer_config

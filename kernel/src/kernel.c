@@ -8,56 +8,18 @@ int main(int argc, char* argv[]) {
     t_config* config = config_create("./kernel.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
-
-    char* config_properties[] = {
-            "IP_MEMORIA",
-            "PUERTO_MEMORIA",
-			"IP_CPU",
-			"PUERTO_CPU_DISPATCH",
-			"PUERTO_CPU_INTERRUPT",
-			"PUERTO_ESCUCHA",
-			"ALGORITMO_PLANIFICACION",
-			"ESTIMACION_INICIAL",
-			"ALFA",
-			"GRADO_MULTIPROGRAMACION",
-			"TIEMPO_MAXIMO_BLOQUEADO",
-            NULL
-        };
-
     leer_config(config,configuraciones);
 
     int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
-    int client_socket = esperar_cliente(logger , "un nombre" , servidor);
-
-	t_list* lista;
-    while (client_socket != -1) {
-		int cod_op = recibir_operacion(client_socket);
-		switch (cod_op) {
-		case MENSAJE:
-			recibir_mensaje(client_socket , logger);
-			break;
-		case PAQUETE:
-			log_info(logger, "Me llegaron los siguientes valores:\n");
-			// list_iterate(lista, (void*) iterator);
-			break;
-		
-		case INICIAR_PROCESO:
-			log_info(logger, "Me llego un INICIAR_PROCESO\n");
-			int size;
-   			char * buffer = recibir_buffer(&size, client_socket);
-			t_pcb* pcb  = crear_pcb(buffer,configuraciones);
-			printf("El process id es: %d\n",pcb->pid);
-			free(pcb);
-			break;
-		
-		case -1:
-			log_error(logger, "el cliente se desconecto. Terminando servidor");
-			return EXIT_FAILURE;
-		default:
-			log_warning(logger,"Operacion desconocida. No quieras meter la pata");
-			break;
-		}
+	while(1){
+		pthread_t hilo_servidor;
+		int cliente_fd = esperar_cliente(logger,"un nombre",servidor);
+		pthread_create(&hilo_servidor, NULL , (void*) atender_cliente,(void*) cliente_fd);
+		pthread_detach(hilo_servidor);
+		pthread_join(hilo_servidor,NULL);
 	}
+	
+	
     liberar_memoria(logger,config,configuraciones,servidor);
 
     return 0;
@@ -136,12 +98,46 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones){
 	pcb->size = tamanio_proceso;
 	pcb->pc = 0;
 	pcb->lista_instrucciones = lista;
-	// pedir a memoria la tabla y asignarla
-	pcb->estimacion_inicial = configuraciones->estimacion_inicial;
-	pcb->alfa = configuraciones->alfa;
+	//pcb->estimacion_inicial = configuraciones->estimacion_inicial;
+	//pcb->alfa = configuraciones->alfa;
 	return pcb; 
 }
 
+void atender_cliente(int client_socket){
+		printf("Atendiendo cliente\n");
+		int cod_op = recibir_operacion(client_socket);
+		switch (cod_op) {
+		case MENSAJE:
+			recibir_mensaje(client_socket , logger);
+			break;
+		case INICIAR_PROCESO:
+			iniciar_proceso(client_socket);
+			break;
+		case -1:
+			//log_error(logger, "el cliente se desconecto. Terminando servidor");
+		default:
+			//log_warning(logger,"Operacion desconocida. No quieras meter la pata");
+			break;
+		}
+}
+
+void manejar_conexion(int server_fd){
+   while(1){
+        int cliente_fd = esperar_cliente(logger,"cliente",server_fd);
+        pthread_t hilo_servidor;
+        pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) cliente_fd);
+        pthread_detach(hilo_servidor);  
+    }
+}
+
+void iniciar_proceso(int client_socket){
+	printf("Me llego un INICIAR_PROCESO\n");	
+		int size;
+   		char * buffer = recibir_buffer(&size, client_socket);
+		t_pcb* pcb  = crear_pcb(buffer,configuraciones);
+		printf("El process id es: %d\n",pcb->pid);
+		free(pcb);
+}
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->ip_memoria = config_get_string_value(config , "IP_MEMORIA");
