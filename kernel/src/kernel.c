@@ -1,26 +1,10 @@
 #include<kernel.h>
 
 int main(int argc, char* argv[]) {
-	///home/utnso/tp-2022-1c-Champagne-SO/kernel/kernel.log Harcodeada la ruta
     t_log* logger = log_create("./kernel.log","KERNEL", false , LOG_LEVEL_TRACE);
     t_config* config = config_create("./kernel.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
-
-    char* config_properties[] = {
-            "IP_MEMORIA",
-            "PUERTO_MEMORIA",
-			"IP_CPU",
-			"PUERTO_CPU_DISPATCH",
-			"PUERTO_CPU_INTERRUPT",
-			"PUERTO_ESCUCHA",
-			"ALGORITMO_PLANIFICACION",
-			"ESTIMACION_INICIAL",
-			"ALFA",
-			"GRADO_MULTIPROGRAMACION",
-			"TIEMPO_MAXIMO_BLOQUEADO",
-            NULL
-        };
 
     leer_config(config,configuraciones);
 
@@ -48,7 +32,9 @@ int main(int argc, char* argv[]) {
 			t_pcb* pcb = crear_pcb(lista,configuraciones);
 			enviar_pcb(pcb,logger,configuraciones);
 			printf("El process id es: %d\n",pcb->pid);
+			list_destroy(lista);
 			free(pcb);
+			free(buffer);
 			break;
 		
 		case -1:
@@ -58,9 +44,9 @@ int main(int argc, char* argv[]) {
 			log_warning(logger,"Operacion desconocida. No quieras meter la pata");
 			break;
 		}
+		free(cod_op);
 	}
     liberar_memoria(logger,config,configuraciones,servidor);
-
     return 0;
 }
 
@@ -83,6 +69,7 @@ t_list* decodificar_instrucciones(char* buffer){
 			int y = leer_entero(buffer,i);
 			printf("Me llego un parametro: %d \n",y);
 			list_add(lista,y);
+			free(y);
 		}else if(x==READ){
 			printf("Me llego un %d por lo que es un READ\n",x);
 			list_add(lista,id);
@@ -126,7 +113,11 @@ t_list* decodificar_instrucciones(char* buffer){
 			printf("Me llego un %d por lo que es un EXIT\n",x);
 			list_add(lista,5);
 		}
+		free(id);
+		free(i);
+		free(x);
 	}
+	free(cantidad_enteros);
 	return lista; 
 }
 t_pcb* crear_pcb(t_list* lista,t_configuraciones* configuraciones){
@@ -153,6 +144,7 @@ void enviar_pcb(t_pcb* pcb, t_log* logger,t_configuraciones* configuraciones){
         int ins = list_iterator_next(iterator);
         printf("El entero es: %d\n",ins);
         agregar_entero_a_paquete(paquete,ins);
+        free(ins);
     }
     list_iterator_destroy(iterator);
     int conexion = crear_conexion(logger , "CPU" , configuraciones->ip_cpu ,configuraciones->puerto_cpu_dispatch);

@@ -41,6 +41,8 @@ int main(int argc, char* argv[]) {
     				printf("Lo devuelvo con el tiempo de bloqueo\n");
     			}
        			}
+       			free(instruccion);
+       			free(size);
     			break;
 
     		case -1:
