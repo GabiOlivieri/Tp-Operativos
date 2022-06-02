@@ -1,6 +1,7 @@
 #include<kernel.h>
 
 int pid = 0;
+int procesos_en_memoria = 0;
 
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./kernel.log","KERNEL", false , LOG_LEVEL_DEBUG);
@@ -8,10 +9,16 @@ int main(int argc, char* argv[]) {
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
     leer_config(config,configuraciones);
 	t_queue* cola_new = queue_create();
+	t_queue* cola_ready = queue_create();
     int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
 	
+	t_planificador_struct* planificador = malloc(sizeof(t_planificador_struct));
+	planificador->logger = logger;
+	planificador->configuraciones = configuraciones;
+	planificador->cola_new = cola_new;
+	planificador->cola_ready = cola_ready;
 	pthread_t hilo_planificador_largo_plazo;
-    pthread_create (&hilo_planificador_largo_plazo, NULL , (void*) planificador_largo_plazo,(void*) cola_new);
+    pthread_create (&hilo_planificador_largo_plazo, NULL , (void*) planificador_largo_plazo,(void*) planificador);
     pthread_detach(hilo_planificador_largo_plazo);
 
 	while(1){
@@ -29,19 +36,24 @@ int main(int argc, char* argv[]) {
 
     liberar_memoria(logger,config,configuraciones,servidor);
 	queue_destroy(cola_new);
+	queue_destroy(cola_ready);
     return 0;
 }
 
-void planificador_largo_plazo(t_queue* cola_new){
+void planificador_largo_plazo(void* arg){
+	struct planificador_struct *p;
+	p = (struct planificador_struct*) arg;
 	while(1){
 		sleep(3);
-		if(!queue_is_empty(cola_new)){
-			int size = queue_size(cola_new);
-			printf("La cola NEW tiene procesos %d para planificar\n",size);	
+		if(!queue_is_empty(p->cola_new)&&procesos_en_memoria<=p->configuraciones->grado_multiprogramacion){
+			int size = queue_size(p->cola_new);
+			printf("La cola NEW tiene %d procesos para planificar\n",size);
+			t_pcb* pcb = queue_pop(p->cola_new);
+			queue_push(p->cola_ready,pcb);
+			printf("Se agrego un proceso a la cola ready y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
 		}
 	}
 }
-
 
 t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones){
 	printf("Arranca decodificacion\n");
