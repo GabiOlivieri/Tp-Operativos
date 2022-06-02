@@ -44,8 +44,8 @@ void planificador_corto_plazo(void* arg){
 			t_pcb* pcb = queue_pop(p->colas->cola_ready);
 			queue_push(p->colas->cola_exec,pcb);
 			printf("Se agrego un proceso a la cola EXEC\n");
+			//enviar_pcb(p->logger,p->configuraciones,pcb);
 		}
-		//Enviar a cpu el proceso en exec
 	}
 }
 
@@ -75,19 +75,38 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
 
 void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pcb* pcb){
 	t_paquete* paquete = crear_paquete();
-   		paquete->codigo_operacion = INICIAR_ESTRUCTURAS;
-		agregar_entero_a_paquete(paquete,pcb->pid);
-		int conexion = crear_conexion(logger , "SERVER PLATA Y MIEDO NUNCA TUVE" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
-		enviar_paquete(paquete,conexion);
-		eliminar_paquete(paquete);
-		int codigoOperacion = recibir_operacion(conexion);
-		int size;
-    	char * buffer = recibir_buffer(&size, conexion);
-		close(conexion);
-		int tabla_paginas = leer_entero(buffer,0);
-		pcb->tabla_paginas = tabla_paginas;
+   	paquete->codigo_operacion = INICIAR_ESTRUCTURAS;
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	int conexion = crear_conexion(logger , "Conexion con memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
+	enviar_paquete(paquete,conexion);
+	eliminar_paquete(paquete);
+	int codigoOperacion = recibir_operacion(conexion);
+	int size;
+    char * buffer = recibir_buffer(&size, conexion);
+	close(conexion);
+	int tabla_paginas = leer_entero(buffer,0);
+	pcb->tabla_paginas = tabla_paginas;
 }
-
+void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb){
+	 t_paquete* paquete = crear_paquete();
+    paquete->codigo_operacion = INICIAR_PROCESO;
+    int cantidad_enteros = list_size(pcb->lista_instrucciones);
+    printf("El process enviado a cpu es: %d\n",pcb->pid);
+    agregar_entero_a_paquete(paquete,pcb->pid);
+    agregar_entero_a_paquete(paquete,pcb->pc);
+    agregar_entero_a_paquete(paquete,cantidad_enteros);
+    t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
+    while(list_iterator_has_next(iterator)){
+        int ins = list_iterator_next(iterator);
+        printf("El entero es: %d\n",ins);
+        agregar_entero_a_paquete(paquete,ins);
+    }
+    list_iterator_destroy(iterator);
+    int conexion = crear_conexion(logger , "CPU" , configuraciones->ip_cpu ,configuraciones->puerto_cpu_dispatch);
+    enviar_paquete(paquete,conexion);
+    eliminar_paquete(paquete);
+    close(conexion);
+}
 int atender_cliente(void* arg){
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;

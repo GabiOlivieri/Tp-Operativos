@@ -102,6 +102,7 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
 */
 void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pcb* pcb);
 
+void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb);
 
 /**
 * @NAME: leer_config
