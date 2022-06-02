@@ -35,11 +35,16 @@ typedef struct hilo_struct {
     t_queue* cola_new;
 } t_hilo_struct;
 
+typedef struct colas_struct {
+    t_queue* cola_new;
+    t_queue* cola_ready;
+    t_queue* cola_exec;
+} t_colas_struct;
+
 typedef struct planificador_struct {
     t_log* logger;
     t_configuraciones* configuraciones;
-    t_queue* cola_new;
-    t_queue* cola_ready;
+    t_colas_struct* colas;
 } t_planificador_struct;
 
 /**
@@ -71,6 +76,14 @@ void iniciar_proceso(int client_socket, t_configuraciones* configuraciones, t_qu
 * @DESC: planifica los procesos que entran y salen del sistema
 */
 void planificador_largo_plazo(void* arg);
+
+/**
+* @NAME: planificador_corto_plazo
+* @DESC: planifica los procesos que deben ejecutarse
+*/
+void planificador_corto_plazo(void* arg);
+
+t_colas_struct* crear_colas();
 
 /**
 * @NAME: leer_config

@@ -8,19 +8,19 @@ int main(int argc, char* argv[]) {
 	t_config* config = config_create("./kernel.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
     leer_config(config,configuraciones);
-	t_queue* cola_new = queue_create();
-	t_queue* cola_ready = queue_create();
+	t_colas_struct* colas = crear_colas();
     int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
 	
 	t_planificador_struct* planificador = malloc(sizeof(t_planificador_struct));
 	planificador->logger = logger;
 	planificador->configuraciones = configuraciones;
-	planificador->cola_new = cola_new;
-	planificador->cola_ready = cola_ready;
+	planificador->colas = colas;
 	pthread_t hilo_planificador_largo_plazo;
     pthread_create (&hilo_planificador_largo_plazo, NULL , (void*) planificador_largo_plazo,(void*) planificador);
     pthread_detach(hilo_planificador_largo_plazo);
-
+	pthread_t hilo_planificador_corto_plazo;
+    pthread_create (&hilo_planificador_corto_plazo, NULL , (void*) planificador_corto_plazo,(void*) planificador);
+    pthread_detach(hilo_planificador_corto_plazo);
 	while(1){
 		sleep(1);
         int cliente_fd = esperar_cliente(logger,"cliente",servidor);
@@ -28,15 +28,14 @@ int main(int argc, char* argv[]) {
 		hilo->logger = logger;
 		hilo->socket = cliente_fd;
 		hilo->configuraciones = configuraciones;
-		hilo->cola_new = cola_new;
+		hilo->cola_new = colas->cola_new;
         pthread_t hilo_servidor;
         pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
         pthread_detach(hilo_servidor);  
     }
 
     liberar_memoria(logger,config,configuraciones,servidor);
-	queue_destroy(cola_new);
-	queue_destroy(cola_ready);
+	free(colas);
     return 0;
 }
 
@@ -45,15 +44,42 @@ void planificador_largo_plazo(void* arg){
 	p = (struct planificador_struct*) arg;
 	while(1){
 		sleep(3);
-		if(!queue_is_empty(p->cola_new)&&procesos_en_memoria<=p->configuraciones->grado_multiprogramacion){
-			int size = queue_size(p->cola_new);
+		if(!queue_is_empty(p->colas->cola_new)&&procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
+			int size = queue_size(p->colas->cola_new);
 			printf("La cola NEW tiene %d procesos para planificar\n",size);
-			t_pcb* pcb = queue_pop(p->cola_new);
-			queue_push(p->cola_ready,pcb);
-			printf("Se agrego un proceso a la cola ready y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
+			t_pcb* pcb = queue_pop(p->colas->cola_new);
+			queue_push(p->colas->cola_ready,pcb);
+			printf("Se agrego un proceso a la cola READY y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
 		}
 	}
 }
+
+void planificador_corto_plazo(void* arg){
+	struct planificador_struct *p;
+	p = (struct planificador_struct*) arg;
+	while(1){
+		sleep(3);
+		if(!queue_is_empty(p->colas->cola_ready)&&queue_is_empty(p->colas->cola_exec)){
+			int size = queue_size(p->colas->cola_ready);
+			printf("La cola READY tiene %d procesos para ejecutar\n",size);
+			t_pcb* pcb = queue_pop(p->colas->cola_ready);
+			queue_push(p->colas->cola_exec,pcb);
+			printf("Se agrego un proceso a la cola EXEC");
+		}
+	}
+}
+
+t_colas_struct* crear_colas(){
+	t_colas_struct* colas = malloc(sizeof(t_colas_struct));
+	t_queue* cola_new = queue_create();
+	t_queue* cola_ready = queue_create();
+	t_queue* cola_exec = queue_create();
+	colas->cola_new = cola_new;
+	colas->cola_ready = cola_ready;
+	colas->cola_exec = cola_exec;
+	return colas;
+}
+
 
 t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones){
 	printf("Arranca decodificacion\n");
