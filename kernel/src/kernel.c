@@ -26,7 +26,7 @@ void planificador_largo_plazo(void* arg){
 			int size = queue_size(p->colas->cola_new);
 			printf("La cola NEW tiene %d procesos para planificar\n",size);
 			t_pcb* pcb = queue_pop(p->colas->cola_new);
-			//Pedir iniciar estructuras a memoria
+			//iniciar_estructuras(p->logger,p->configuraciones,pcb);
 			queue_push(p->colas->cola_ready,pcb);
 			printf("Se agrego un proceso a la cola READY y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
 		}
@@ -71,6 +71,21 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
 	pthread_t hilo_planificador_corto_plazo;
     pthread_create (&hilo_planificador_corto_plazo, NULL , (void*) planificador_corto_plazo,(void*) planificador);
     pthread_detach(hilo_planificador_corto_plazo);
+}
+
+void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pcb* pcb){
+	t_paquete* paquete = crear_paquete();
+   		paquete->codigo_operacion = INICIAR_ESTRUCTURAS;
+		agregar_entero_a_paquete(paquete,pcb->pid);
+		int conexion = crear_conexion(logger , "SERVER PLATA Y MIEDO NUNCA TUVE" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
+		enviar_paquete(paquete,conexion);
+		eliminar_paquete(paquete);
+		int codigoOperacion = recibir_operacion(conexion);
+		int size;
+    	char * buffer = recibir_buffer(&size, conexion);
+		close(conexion);
+		int tabla_paginas = leer_entero(buffer,0);
+		pcb->tabla_paginas = tabla_paginas;
 }
 
 int atender_cliente(void* arg){
@@ -171,17 +186,17 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){
 }
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
-	configuraciones->ip_memoria = config_get_string_value(config , "IP_MEMORIA");
-	configuraciones->puerto_memoria = config_get_int_value(config , "PUERTO_MEMORIA");
-	configuraciones->ip_cpu = config_get_string_value(config , "IP_CPU");
-	configuraciones->puerto_cpu_dispatch = config_get_int_value(config , "PUERTO_CPU_DISPATCH");
-	configuraciones->puerto_cpu_interrupt = config_get_int_value(config , "PUERTO_CPU_INTERRUPT");
-	configuraciones->puerto_escucha = config_get_string_value(config , "PUERTO_ESCUCHA");
-	configuraciones->algoritmo_planificacion = config_get_string_value(config , "ALGORITMO_PLANIFICACION");
-	configuraciones->estimacion_inicial = config_get_int_value(config , "ESTIMACION_INICIAL");
-	configuraciones->alfa = config_get_double_value(config , "ALFA");
-	configuraciones->grado_multiprogramacion = config_get_int_value(config , "GRADO_MULTIPROGRAMACION");
-	configuraciones->tiempo_max_bloqueado = config_get_int_value(config , "TIEMPO_MAXIMO_BLOQUEADO");
+    configuraciones->ip_memoria = config_get_string_value(config , "IP_MEMORIA");
+    configuraciones->puerto_memoria = config_get_string_value(config , "PUERTO_MEMORIA");
+    configuraciones->ip_cpu = config_get_string_value(config , "IP_CPU");
+    configuraciones->puerto_cpu_dispatch = config_get_string_value(config , "PUERTO_CPU_DISPATCH");
+    configuraciones->puerto_cpu_interrupt = config_get_string_value(config , "PUERTO_CPU_INTERRUPT");
+    configuraciones->puerto_escucha = config_get_string_value(config , "PUERTO_ESCUCHA");
+    configuraciones->algoritmo_planificacion = config_get_string_value(config , "ALGORITMO_PLANIFICACION");
+    configuraciones->estimacion_inicial = config_get_int_value(config , "ESTIMACION_INICIAL");
+    configuraciones->alfa = config_get_double_value(config , "ALFA");
+    configuraciones->grado_multiprogramacion = config_get_int_value(config , "GRADO_MULTIPROGRAMACION");
+    configuraciones->tiempo_max_bloqueado = config_get_int_value(config , "TIEMPO_MAXIMO_BLOQUEADO");
 }
 
 void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* configuraciones , int servidor){

@@ -7,7 +7,8 @@ typedef enum
 {
 	MENSAJE,
 	PAQUETE,
-	INICIAR_PROCESO
+	INICIAR_PROCESO,
+	INICIAR_ESTRUCTURAS
 } op_code;
 
 typedef enum

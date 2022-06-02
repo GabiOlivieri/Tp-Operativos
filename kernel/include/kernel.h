@@ -6,6 +6,7 @@
 #include <commons/log.h>
 #include <shared/socket.h>
 #include <shared/server.h>
+#include <shared/client.h>
 #include <commons/collections/list.h>
 #include <commons/config.h>
 #include <commons/collections/queue.h>
@@ -16,10 +17,10 @@
 
 typedef struct configuraciones {
     char *ip_memoria;
-    u_int16_t puerto_memoria;
+    char * puerto_memoria;
     char *ip_cpu;
-    u_int16_t puerto_cpu_dispatch;
-    u_int16_t puerto_cpu_interrupt;
+    char * puerto_cpu_dispatch;
+    char * puerto_cpu_interrupt;
     char *puerto_escucha;
     char *algoritmo_planificacion;
     u_int16_t estimacion_inicial;
@@ -94,6 +95,14 @@ t_colas_struct* crear_colas();
 * @DESC: instancia hilos para los planificadores pasando la informacion que necesita para planificar
 */
 void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_colas_struct* colas);
+
+/**
+* @NAME: iniciar_estructuras()
+* @DESC: solicita a memoria iniciar las estructuras y asigna la tabla de paginas al pcb
+*/
+void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pcb* pcb);
+
+
 /**
 * @NAME: leer_config
 * @DESC: lee los datos del config.
