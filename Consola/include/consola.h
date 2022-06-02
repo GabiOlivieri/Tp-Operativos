@@ -32,7 +32,7 @@ t_list* leer_file(char* path,t_log* logger);
 * @NAME: enviar_instrucciones
 * @DESC: lee los datos de la lista y las envia
 */
-void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre);
+void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre,char* argc);
 
 /**
 * @NAME: liberar_memoria
