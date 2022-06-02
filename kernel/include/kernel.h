@@ -9,6 +9,9 @@
 #include <commons/collections/list.h>
 #include <commons/config.h>
 #include <pthread.h>
+#include<unistd.h>
+#include <semaphore.h>
+
 
 typedef struct configuraciones {
     char *ip_memoria;
@@ -24,8 +27,12 @@ typedef struct configuraciones {
     u_int16_t tiempo_max_bloqueado;
 } t_configuraciones;
 
-t_configuraciones* configuraciones;
-t_log* logger;
+typedef struct hilo_struct {
+    int socket;
+    t_log* logger;
+    t_configuraciones* configuraciones;
+} t_hilo_struct;
+
 
 /**
 * @NAME: crear_pcb
@@ -37,12 +44,12 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones);
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
-void manejar_conexion(int server_fd);
+void manejar_conexion(void* hilo_struct);
 
 
-void atender_cliente(int client_socket);
+int atender_cliente(void* hilo_struct);
 
-void iniciar_proceso(int client_socket);
+void iniciar_proceso(int client_socket, t_configuraciones* configuraciones);
 
 /**
 * @NAME: leer_config
@@ -61,5 +68,6 @@ void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* config
 * @DESC: libera la memoria usada de nombre structura para almacenar los valores obtenidos del config.
 */
 void configuraciones_free(t_configuraciones* configuraciones);
+
 
 #endif

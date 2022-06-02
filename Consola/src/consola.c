@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
     leer_config(config , nombre);
 
     t_list* lista = leer_file(argv[2],logger);
-    enviar_instrucciones(lista,logger,nombre,argc);
+    enviar_instrucciones(lista,logger,nombre,argv[1]);
     list_destroy(lista);
 
     liberar_memoria(logger , nombre, config);
@@ -84,11 +84,12 @@ t_list* leer_file(char* path,t_log* logger){
     free(file_contents);
     return lista;
 }
-void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre,int argc){
+void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre,char* argc){
     t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = INICIAR_PROCESO;
-    printf("El tamaño del proceso es: %d\n",argc);
-    agregar_entero_a_paquete(paquete,argc);
+    int tamanio_proceso = atoi(argc);
+    printf("El tamaño del proceso es: %d\n",tamanio_proceso);
+    agregar_entero_a_paquete(paquete,tamanio_proceso);
     int cantidad_enteros = list_size(lista);
     printf("La cantidad de enteros es: %d\n",cantidad_enteros);
     agregar_entero_a_paquete(paquete,cantidad_enteros);

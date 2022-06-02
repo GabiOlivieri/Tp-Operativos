@@ -3,23 +3,25 @@
 int pid = 0;
 
 int main(int argc, char* argv[]) {
-	///home/utnso/tp-2022-1c-Champagne-SO/kernel/kernel.log Harcodeada la ruta
-    t_log* logger = log_create("./kernel.log","KERNEL", false , LOG_LEVEL_TRACE);
-    t_config* config = config_create("./kernel.conf");
+    t_log* logger = log_create("./kernel.log","KERNEL", false , LOG_LEVEL_DEBUG);
+	t_config* config = config_create("./kernel.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
-
     leer_config(config,configuraciones);
 
     int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
+	
 	while(1){
-		pthread_t hilo_servidor;
-		int cliente_fd = esperar_cliente(logger,"un nombre",servidor);
-		pthread_create(&hilo_servidor, NULL , (void*) atender_cliente,(void*) cliente_fd);
-		pthread_detach(hilo_servidor);
-		pthread_join(hilo_servidor,NULL);
-	}
-	
-	
+		sleep(1);
+        int cliente_fd = esperar_cliente(logger,"cliente",servidor);
+		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
+		hilo->logger = logger;
+		hilo->socket = cliente_fd;
+		hilo->configuraciones = configuraciones;
+        pthread_t hilo_servidor;
+        pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
+        pthread_detach(hilo_servidor);  
+    }
+
     liberar_memoria(logger,config,configuraciones,servidor);
 
     return 0;
@@ -94,49 +96,60 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones){
 		}
 	}
 	t_pcb* pcb = malloc(sizeof(t_pcb));
-	pcb->pid = pid++; //Variable global que se incrementa
+	pcb->pid = pid++; 
 	pcb->size = tamanio_proceso;
 	pcb->pc = 0;
 	pcb->lista_instrucciones = lista;
-	//pcb->estimacion_inicial = configuraciones->estimacion_inicial;
-	//pcb->alfa = configuraciones->alfa;
+	pcb->estimacion_inicial = configuraciones->estimacion_inicial;
+	pcb->alfa = configuraciones->alfa;
 	return pcb; 
 }
 
-void atender_cliente(int client_socket){
-		printf("Atendiendo cliente\n");
-		int cod_op = recibir_operacion(client_socket);
+int atender_cliente(void* arg){
+	struct hilo_struct *p;
+	p = (struct hilo_struct*) arg;
+	while (1){
+		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {
 		case MENSAJE:
-			recibir_mensaje(client_socket , logger);
+			recibir_mensaje(p->socket , p->logger);
 			break;
 		case INICIAR_PROCESO:
-			iniciar_proceso(client_socket);
+			iniciar_proceso(p->socket,p->configuraciones);
 			break;
 		case -1:
-			//log_error(logger, "el cliente se desconecto. Terminando servidor");
+			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");
+			return EXIT_FAILURE;
 		default:
-			//log_warning(logger,"Operacion desconocida. No quieras meter la pata");
+			log_warning(p->logger,"Operacion desconocida");
 			break;
 		}
+	}
+	return EXIT_SUCCESS;	
 }
 
-void manejar_conexion(int server_fd){
-   while(1){
-        int cliente_fd = esperar_cliente(logger,"cliente",server_fd);
+void manejar_conexion(void* arg){
+	struct hilo_struct *p;
+	p = (struct hilo_struct*) arg;
+   	while(1){
+        int client_socket = esperar_cliente(p->logger,"cliente",p->socket);
+		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
+		hilo->logger = p->logger;
+		hilo->socket = client_socket;
+		hilo->configuraciones = p->configuraciones;
         pthread_t hilo_servidor;
-        pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) cliente_fd);
+        pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
         pthread_detach(hilo_servidor);  
     }
 }
 
-void iniciar_proceso(int client_socket){
+void iniciar_proceso(int client_socket, t_configuraciones* configuraciones){
 	printf("Me llego un INICIAR_PROCESO\n");	
-		int size;
-   		char * buffer = recibir_buffer(&size, client_socket);
-		t_pcb* pcb  = crear_pcb(buffer,configuraciones);
-		printf("El process id es: %d\n",pcb->pid);
-		free(pcb);
+	int size;
+   	char * buffer = recibir_buffer(&size, client_socket);
+	t_pcb* pcb  = crear_pcb(buffer,configuraciones);
+	printf("El process id es: %d\n",pcb->pid);
+	free(pcb);
 }
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
