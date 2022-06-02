@@ -51,13 +51,13 @@ typedef struct planificador_struct {
 * @NAME: crear_pcb
 * @DESC: lee los datos del paquete e interpreta las instrucciones para crear el pcb correspondiente
 */
-t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones);
+t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger);
 
 /**
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
-void manejar_conexion(void* hilo_struct);
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_new);
 
 /**
 * @NAME: atender_cliente
@@ -69,7 +69,7 @@ int atender_cliente(void* hilo_struct);
 * @NAME: atender_cliente
 * @DESC: recibe la informacion del proceso y crea su pcb correspondiente
 */
-void iniciar_proceso(int client_socket, t_configuraciones* configuraciones, t_queue* cola_new);
+void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones, t_queue* cola_new);
 
 /**
 * @NAME: planificador_largo_plazo
@@ -83,8 +83,17 @@ void planificador_largo_plazo(void* arg);
 */
 void planificador_corto_plazo(void* arg);
 
+/**
+* @NAME: crear_colas()
+* @DESC: crea las colas para los procesos y las almacena en un struct
+*/
 t_colas_struct* crear_colas();
 
+/**
+* @NAME: crear_planificadores()
+* @DESC: instancia hilos para los planificadores pasando la informacion que necesita para planificar
+*/
+void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_colas_struct* colas);
 /**
 * @NAME: leer_config
 * @DESC: lee los datos del config.

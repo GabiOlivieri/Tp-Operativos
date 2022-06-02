@@ -9,31 +9,9 @@ int main(int argc, char* argv[]) {
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
     leer_config(config,configuraciones);
 	t_colas_struct* colas = crear_colas();
-    int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
-	
-	t_planificador_struct* planificador = malloc(sizeof(t_planificador_struct));
-	planificador->logger = logger;
-	planificador->configuraciones = configuraciones;
-	planificador->colas = colas;
-	pthread_t hilo_planificador_largo_plazo;
-    pthread_create (&hilo_planificador_largo_plazo, NULL , (void*) planificador_largo_plazo,(void*) planificador);
-    pthread_detach(hilo_planificador_largo_plazo);
-	pthread_t hilo_planificador_corto_plazo;
-    pthread_create (&hilo_planificador_corto_plazo, NULL , (void*) planificador_corto_plazo,(void*) planificador);
-    pthread_detach(hilo_planificador_corto_plazo);
-	while(1){
-		sleep(1);
-        int cliente_fd = esperar_cliente(logger,"cliente",servidor);
-		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
-		hilo->logger = logger;
-		hilo->socket = cliente_fd;
-		hilo->configuraciones = configuraciones;
-		hilo->cola_new = colas->cola_new;
-        pthread_t hilo_servidor;
-        pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
-        pthread_detach(hilo_servidor);  
-    }
-
+	crear_planificadores(logger,configuraciones,colas);
+	int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
+	manejar_conexion(logger,configuraciones,servidor,colas->cola_new);
     liberar_memoria(logger,config,configuraciones,servidor);
 	free(colas);
     return 0;
@@ -64,7 +42,7 @@ void planificador_corto_plazo(void* arg){
 			printf("La cola READY tiene %d procesos para ejecutar\n",size);
 			t_pcb* pcb = queue_pop(p->colas->cola_ready);
 			queue_push(p->colas->cola_exec,pcb);
-			printf("Se agrego un proceso a la cola EXEC");
+			printf("Se agrego un proceso a la cola EXEC\n");
 		}
 	}
 }
@@ -80,69 +58,17 @@ t_colas_struct* crear_colas(){
 	return colas;
 }
 
-
-t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones){
-	printf("Arranca decodificacion\n");
-	t_list* lista = list_create();
-	int tamanio_proceso = leer_entero(buffer,0);
-	printf("El tamaño del proceso es: %d\n",tamanio_proceso);
-	int cantidad_enteros = leer_entero(buffer,1);
-	printf("La cantidad de enteros es: %d\n",cantidad_enteros);
-	cantidad_enteros++;
-	for(int i = 2; i <= cantidad_enteros;i++){
-		int x = leer_entero(buffer,i);
-		if(x==NO_OP){
-			printf("Me llego un %d por lo que es un NO_OP\n",x);
-			list_add(lista,x);
-		}else if(x==IO){
-			printf("Me llego un %d por lo que es un IO\n",x);
-			list_add(lista,x);
-			i++;
-			int y = leer_entero(buffer,i);
-			printf("Me llego un parametro: %d \n",y);
-			list_add(lista,y);
-		}else if(x==READ){
-			printf("Me llego un %d por lo que es un READ\n",x);
-			list_add(lista,x);
-			i++;
-			int y = leer_entero(buffer,i);
-			printf("Me llego un parametro: %d \n",y);
-			list_add(lista,y);
-		}else if(x==WRITE){
-			printf("Me llego un %d por lo que es un WRITE\n",x);
-			list_add(lista,x);
-			i++;
-			int y = leer_entero(buffer,i);
-			printf("Me llego un parametro: %d \n",y);
-			list_add(lista,y);
-			i++;
-			int z = leer_entero(buffer,i);
-			printf("Me llego un parametro: %d \n",z);
-			list_add(lista,z);
-		}else if(x==COPY){
-			printf("Me llego un %d por lo que es un COPY\n",x);
-			list_add(lista,x);
-			i++;
-			int y = leer_entero(buffer,i);
-			printf("Me llego un parametro: %d \n",y);
-			list_add(lista,y);
-			i++;
-			int z = leer_entero(buffer,i);
-			printf("Me llego un parametro: %d \n",z);
-			list_add(lista,z);
-		}else if(x==EXIT){
-			printf("Me llego un %d por lo que es un EXIT\n",x);
-			list_add(lista,x);
-		}
-	}
-	t_pcb* pcb = malloc(sizeof(t_pcb));
-	pcb->pid = pid++; 
-	pcb->size = tamanio_proceso;
-	pcb->pc = 0;
-	pcb->lista_instrucciones = lista;
-	pcb->estimacion_inicial = configuraciones->estimacion_inicial;
-	pcb->alfa = configuraciones->alfa;
-	return pcb; 
+void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_colas_struct* colas){
+	t_planificador_struct* planificador = malloc(sizeof(t_planificador_struct));
+	planificador->logger = logger;
+	planificador->configuraciones = configuraciones;
+	planificador->colas = colas;
+	pthread_t hilo_planificador_largo_plazo;
+    pthread_create (&hilo_planificador_largo_plazo, NULL , (void*) planificador_largo_plazo,(void*) planificador);
+    pthread_detach(hilo_planificador_largo_plazo);
+	pthread_t hilo_planificador_corto_plazo;
+    pthread_create (&hilo_planificador_corto_plazo, NULL , (void*) planificador_corto_plazo,(void*) planificador);
+    pthread_detach(hilo_planificador_corto_plazo);
 }
 
 int atender_cliente(void* arg){
@@ -155,7 +81,7 @@ int atender_cliente(void* arg){
 			recibir_mensaje(p->socket , p->logger);
 			break;
 		case INICIAR_PROCESO:
-			iniciar_proceso(p->socket,p->configuraciones,p->cola_new);
+			iniciar_proceso(p->logger,p->socket,p->configuraciones,p->cola_new);
 			break;
 		case -1:
 			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");
@@ -168,28 +94,78 @@ int atender_cliente(void* arg){
 	return EXIT_SUCCESS;	
 }
 
-void manejar_conexion(void* arg){
-	struct hilo_struct *p;
-	p = (struct hilo_struct*) arg;
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_queue* cola_new){
    	while(1){
-        int client_socket = esperar_cliente(p->logger,"cliente",p->socket);
+        int client_socket = esperar_cliente(logger,"a escucha",socket);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
-		hilo->logger = p->logger;
+		hilo->logger = logger;
 		hilo->socket = client_socket;
-		hilo->configuraciones = p->configuraciones;
+		hilo->configuraciones = configuraciones;
+		hilo->cola_new = cola_new;
         pthread_t hilo_servidor;
         pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
         pthread_detach(hilo_servidor);  
     }
 }
 
-void iniciar_proceso(int client_socket, t_configuraciones* configuraciones,t_queue* cola_new){
-	printf("Me llego un INICIAR_PROCESO\n");	
+void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones,t_queue* cola_new){
+	log_info(logger,"Recibi un INICIAR_PROCESO desde consola\n");	
 	int size;
    	char * buffer = recibir_buffer(&size, client_socket);
-	t_pcb* pcb  = crear_pcb(buffer,configuraciones);
-	printf("El process id es: %d\n",pcb->pid);
+	t_pcb* pcb  = crear_pcb(buffer,configuraciones,logger);
+	log_info(logger,"Se creo el PCB con pid=%d y tamaño=%d\n",pcb->pid,pcb->size);
 	queue_push(cola_new,pcb);
+}
+
+t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){
+	log_info(logger,"Decodificando paquete\n");
+	t_list* lista = list_create();
+	int tamanio_proceso = leer_entero(buffer,0);
+	int cantidad_enteros = leer_entero(buffer,1);
+	cantidad_enteros++;
+	for(int i = 2; i <= cantidad_enteros;i++){
+		int x = leer_entero(buffer,i);
+		if(x==NO_OP){
+			list_add(lista,x);
+		}else if(x==IO){
+			list_add(lista,x);
+			i++;
+			int y = leer_entero(buffer,i);
+			list_add(lista,y);
+		}else if(x==READ){
+			list_add(lista,x);
+			i++;
+			int y = leer_entero(buffer,i);
+			list_add(lista,y);
+		}else if(x==WRITE){
+			list_add(lista,x);
+			i++;
+			int y = leer_entero(buffer,i);
+			list_add(lista,y);
+			i++;
+			int z = leer_entero(buffer,i);
+			list_add(lista,z);
+		}else if(x==COPY){
+			list_add(lista,x);
+			i++;
+			int y = leer_entero(buffer,i);
+			list_add(lista,y);
+			i++;
+			int z = leer_entero(buffer,i);
+			list_add(lista,z);
+		}else if(x==EXIT){
+			list_add(lista,x);
+		}
+	}
+	log_info(logger,"Decodificacion finalizada\n");
+	t_pcb* pcb = malloc(sizeof(t_pcb));
+	pcb->pid = pid++; 
+	pcb->size = tamanio_proceso;
+	pcb->pc = 0;
+	pcb->lista_instrucciones = lista;
+	pcb->estimacion_inicial = configuraciones->estimacion_inicial;
+	pcb->alfa = configuraciones->alfa;
+	return pcb; 
 }
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){

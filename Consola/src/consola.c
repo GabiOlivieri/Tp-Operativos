@@ -114,6 +114,5 @@ void liberar_memoria(t_log* logger, t_nombre* nombre, t_config* config){
 }
 
 void nombre_free(t_nombre* nombre){
-    // free(nombre->ip_kernel); // no se porque sin esto me hace todo el free de una igual XD
     free(nombre);
 }
