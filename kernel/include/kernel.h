@@ -8,6 +8,7 @@
 #include <shared/server.h>
 #include <commons/collections/list.h>
 #include <commons/config.h>
+#include <commons/collections/queue.h>
 #include <pthread.h>
 #include<unistd.h>
 #include <semaphore.h>
@@ -31,6 +32,7 @@ typedef struct hilo_struct {
     int socket;
     t_log* logger;
     t_configuraciones* configuraciones;
+    t_queue* cola_new;
 } t_hilo_struct;
 
 
@@ -46,10 +48,19 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones);
 */
 void manejar_conexion(void* hilo_struct);
 
-
+/**
+* @NAME: atender_cliente
+* @DESC: recibe la operacion del cliente y la ejecuta
+*/
 int atender_cliente(void* hilo_struct);
 
-void iniciar_proceso(int client_socket, t_configuraciones* configuraciones);
+/**
+* @NAME: atender_cliente
+* @DESC: recibe la informacion del proceso y crea su pcb correspondiente
+*/
+void iniciar_proceso(int client_socket, t_configuraciones* configuraciones, t_queue* cola_new);
+
+void planificador_largo_plazo(t_queue* cola_new);
 
 /**
 * @NAME: leer_config
