@@ -26,6 +26,7 @@ void planificador_largo_plazo(void* arg){
 			int size = queue_size(p->colas->cola_new);
 			printf("La cola NEW tiene %d procesos para planificar\n",size);
 			t_pcb* pcb = queue_pop(p->colas->cola_new);
+			//Pedir iniciar estructuras a memoria
 			queue_push(p->colas->cola_ready,pcb);
 			printf("Se agrego un proceso a la cola READY y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
 		}
@@ -44,6 +45,7 @@ void planificador_corto_plazo(void* arg){
 			queue_push(p->colas->cola_exec,pcb);
 			printf("Se agrego un proceso a la cola EXEC\n");
 		}
+		//Enviar a cpu el proceso en exec
 	}
 }
 
