@@ -7,7 +7,8 @@ typedef enum
 {
 	MENSAJE,
 	PAQUETE,
-	INICIAR_PROCESO
+	INICIAR_PROCESO,
+    DEVOLVER_PROCESO
 } op_code;
 
 typedef enum
@@ -19,6 +20,15 @@ typedef enum
 	COPY,
 	EXIT
 } op_ins;
+
+typedef enum
+{
+	NEW,
+    READY,
+    RUNNING,
+    BLOCKED,
+    TERMINATED
+} estado;
 
 typedef struct
 {
@@ -39,8 +49,9 @@ typedef struct
     int pc;
     t_list* lista_instrucciones;
     int tabla_paginas; //Inchequeable
-    int estimacion_rafaga;
+    int estimacion_inicial;
     float alfa;
+    estado estado;
 }t_pcb;
 
 typedef struct

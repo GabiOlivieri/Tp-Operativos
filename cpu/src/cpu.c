@@ -30,21 +30,15 @@ int main(int argc, char* argv[]) {
 
     		case INICIAR_PROCESO:
     			log_info(logger, "Me llego un INICIAR_PROCESO\n");
-    			int instruccion;
+    			int instruccion=0;
     			int size;
        			char * buffer = recibir_buffer(&size, client_socket);
        			t_pcb* pcb = recibir_pcb(buffer);
-       			while (!hay_interrupcion() && instruccion != EXIT){
-    			instruccion = ejecutar_instruccion(pcb,configuraciones);
-
-    			if (instruccion == IO){
-    				printf("Lo devuelvo con el tiempo de bloqueo\n");
-    			}
-       			}
-       			free(instruccion);
-       			free(size);
+       			while (!hay_interrupcion() && instruccion != EXIT && instruccion != IO){
+    			instruccion = ejecutar_instruccion(pcb,configuraciones);}
+       			devolver_pcb(pcb,logger);
     			break;
-
+			
     		case -1:
     			log_error(logger, "el cliente se desconecto. Terminando servidor");
     			return EXIT_FAILURE;
@@ -70,15 +64,35 @@ int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones){
 			pcb->pc++;
 			int y = list_get(pcb->lista_instrucciones,pcb->pc);
 			printf("El argumento recibido es %d\n",y);
+			pcb->estado = BLOCKED;
 		}
-		else if (x==EXIT) return x;
+		else if (x==EXIT) {
+			pcb->estado = TERMINATED;
+			return x;}
 		pcb->pc++;
 		return x;
 
 }
 
-void devolver_pcb(){
-
+void devolver_pcb(t_pcb* pcb,t_log* logger){
+	t_paquete* paquete = crear_paquete();
+    paquete->codigo_operacion = DEVOLVER_PROCESO;
+    int cantidad_enteros = list_size(pcb->lista_instrucciones);
+    printf("El process enviado a kernel es: %d\n",pcb->pid);
+    agregar_entero_a_paquete(paquete,pcb->pid);
+    agregar_entero_a_paquete(paquete,pcb->pc);
+    agregar_entero_a_paquete(paquete,pcb->estado);
+    t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
+    while(list_iterator_has_next(iterator)){
+        int ins = list_iterator_next(iterator);
+        printf("El entero es: %d\n",ins);
+        agregar_entero_a_paquete(paquete,ins);
+    }
+    list_iterator_destroy(iterator);
+    int conexion = crear_conexion(logger , "CPU" , "127.0.0.1" , "8000" );
+    enviar_paquete(paquete,conexion);
+    eliminar_paquete(paquete);
+    close(conexion);
 }
 
 
@@ -93,10 +107,10 @@ t_pcb* recibir_pcb(char* buffer){
 	printf("El id de pcb recibido es: %d\n",pcb->pid);
 	pcb->pc = leer_entero(buffer,1);
 	printf("El pc recibido es: %d\n",pcb->pc);
+	pcb->estado = RUNNING;
 
 	pcb->lista_instrucciones = obtener_lista_instrucciones(buffer,pcb);
 
-	printf("El pc recibido es: %d\n",pcb->pc);
 	return pcb;
 }
 

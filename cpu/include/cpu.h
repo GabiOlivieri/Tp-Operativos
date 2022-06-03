@@ -55,4 +55,6 @@ int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones);
 
 int hay_interrupcion();
 
+void devolver_pcb(t_pcb* pcb,t_log* logger);
+
 #endif
