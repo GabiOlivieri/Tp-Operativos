@@ -29,18 +29,18 @@ typedef struct configuraciones {
     u_int16_t tiempo_max_bloqueado;
 } t_configuraciones;
 
-typedef struct hilo_struct {
-    int socket;
-    t_log* logger;
-    t_configuraciones* configuraciones;
-    t_queue* cola_new;
-} t_hilo_struct;
-
 typedef struct colas_struct {
     t_queue* cola_new;
     t_queue* cola_ready;
     t_queue* cola_exec;
 } t_colas_struct;
+
+typedef struct hilo_struct {
+    int socket;
+    t_log* logger;
+    t_configuraciones* configuraciones;
+    t_colas_struct* colas;
+} t_hilo_struct;
 
 typedef struct planificador_struct {
     t_log* logger;
@@ -64,13 +64,16 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb);
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_new);
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_colas_struct* colas);
 
 /**
 * @NAME: atender_cliente
 * @DESC: recibe la operacion del cliente y la ejecuta
 */
 int atender_cliente(void* hilo_struct);
+
+
+int atender_cpu(void* arg);
 
 /**
 * @NAME: atender_cliente

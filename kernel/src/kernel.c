@@ -11,8 +11,8 @@ int main(int argc, char* argv[]) {
 	t_colas_struct* colas = crear_colas();
 	crear_planificadores(logger,configuraciones,colas);
 	int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
-	manejar_conexion(logger,configuraciones,servidor,colas->cola_new);
-    liberar_memoria(logger,config,configuraciones,servidor);
+	manejar_conexion(logger,configuraciones,servidor,colas);
+	liberar_memoria(logger,config,configuraciones,servidor);
 	free(colas);
     return 0;
 }
@@ -44,7 +44,7 @@ void planificador_corto_plazo(void* arg){
 			t_pcb* pcb = queue_pop(p->colas->cola_ready);
 			queue_push(p->colas->cola_exec,pcb);
 			printf("Se agrego un proceso a la cola EXEC\n");
-			enviar_pcb(p->logger,p->configuraciones,pcb);
+			enviar_pcb(p->logger,p->configuraciones,pcb); 
 		}
 	}
 }
@@ -117,7 +117,7 @@ int atender_cliente(void* arg){
 			recibir_mensaje(p->socket , p->logger);
 			break;
 		case INICIAR_PROCESO:
-			iniciar_proceso(p->logger,p->socket,p->configuraciones,p->cola_new);
+			iniciar_proceso(p->logger,p->socket,p->configuraciones,p->colas->cola_new);
 			break;
 		case DEVOLVER_PROCESO:
 			recibir_pcb_de_cpu(p->logger,p->socket,p->configuraciones);
@@ -133,18 +133,41 @@ int atender_cliente(void* arg){
 	return EXIT_SUCCESS;	
 }
 
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_queue* cola_new){
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_colas_struct* colas){
    	while(1){
-        int client_socket = esperar_cliente(logger,"a escucha",socket);
+        int client_socket = esperar_cliente(logger,"escucha",socket);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
 		hilo->logger = logger;
 		hilo->socket = client_socket;
 		hilo->configuraciones = configuraciones;
-		hilo->cola_new = cola_new;
+		hilo->colas = colas;
         pthread_t hilo_servidor;
         pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
         pthread_detach(hilo_servidor);  
-    }
+    }	
+}
+
+int atender_cpu(void* arg){
+	struct hilo_struct *p;
+	p = (struct hilo_struct*) arg;
+	while (1){
+		int cod_op = recibir_operacion(p->socket);
+		switch (cod_op) {
+		case MENSAJE:
+			recibir_mensaje(p->socket , p->logger);
+			break;
+		case DEVOLVER_PROCESO:
+			recibir_pcb_de_cpu(p->logger,p->socket,p->configuraciones);
+			break;
+		case -1:
+			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");
+			return EXIT_FAILURE;
+		default:
+			log_warning(p->logger,"Operacion desconocida");
+			break;
+		}
+	}
+	return EXIT_SUCCESS;
 }
 
 void recibir_pcb_de_cpu(t_log* logger,int client_socket, t_configuraciones* configuraciones){
