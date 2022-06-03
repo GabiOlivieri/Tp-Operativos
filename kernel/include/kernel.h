@@ -55,6 +55,12 @@ typedef struct planificador_struct {
 t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger);
 
 /**
+* @NAME: enviar_pcb
+* @DESC: Envia el pcb recibido a cpu
+*/
+void enviar_pcb(t_pcb* pcb, t_log* logger,t_configuraciones* configuraciones);
+
+/**
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
