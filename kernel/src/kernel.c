@@ -26,7 +26,7 @@ void planificador_largo_plazo(void* arg){
 			int size = queue_size(p->colas->cola_new);
 			printf("La cola NEW tiene %d procesos para planificar\n",size);
 			t_pcb* pcb = queue_pop(p->colas->cola_new);
-			//Pedir iniciar estructuras a memoria
+			//iniciar_estructuras(p->logger,p->configuraciones,pcb);
 			queue_push(p->colas->cola_ready,pcb);
 			printf("Se agrego un proceso a la cola READY y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
 		}
@@ -80,6 +80,40 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
     pthread_detach(hilo_planificador_corto_plazo);
 }
 
+void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pcb* pcb){
+	t_paquete* paquete = crear_paquete();
+   	paquete->codigo_operacion = INICIAR_ESTRUCTURAS;
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	int conexion = crear_conexion(logger , "Conexion con memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
+	enviar_paquete(paquete,conexion);
+	eliminar_paquete(paquete);
+	int codigoOperacion = recibir_operacion(conexion);
+	int size;
+    char * buffer = recibir_buffer(&size, conexion);
+	close(conexion);
+	int tabla_paginas = leer_entero(buffer,0);
+	pcb->tabla_paginas = tabla_paginas;
+}
+void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb){
+	 t_paquete* paquete = crear_paquete();
+    paquete->codigo_operacion = INICIAR_PROCESO;
+    int cantidad_enteros = list_size(pcb->lista_instrucciones);
+    printf("El process enviado a cpu es: %d\n",pcb->pid);
+    agregar_entero_a_paquete(paquete,pcb->pid);
+    agregar_entero_a_paquete(paquete,pcb->pc);
+    agregar_entero_a_paquete(paquete,cantidad_enteros);
+    t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
+    while(list_iterator_has_next(iterator)){
+        int ins = list_iterator_next(iterator);
+        printf("El entero es: %d\n",ins);
+        agregar_entero_a_paquete(paquete,ins);
+    }
+    list_iterator_destroy(iterator);
+    int conexion = crear_conexion(logger , "CPU" , configuraciones->ip_cpu ,configuraciones->puerto_cpu_dispatch);
+    enviar_paquete(paquete,conexion);
+    eliminar_paquete(paquete);
+    close(conexion);
+}
 int atender_cliente(void* arg){
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;
@@ -223,17 +257,17 @@ void enviar_pcb(t_pcb* pcb, t_log* logger,t_configuraciones* configuraciones){
 }
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
-	configuraciones->ip_memoria = config_get_string_value(config , "IP_MEMORIA");
-	configuraciones->puerto_memoria = config_get_int_value(config , "PUERTO_MEMORIA");
-	configuraciones->ip_cpu = config_get_string_value(config , "IP_CPU");
-	configuraciones->puerto_cpu_dispatch = config_get_string_value(config , "PUERTO_CPU_DISPATCH");
-	configuraciones->puerto_cpu_interrupt = config_get_string_value(config , "PUERTO_CPU_INTERRUPT");
-	configuraciones->puerto_escucha = config_get_string_value(config , "PUERTO_ESCUCHA");
-	configuraciones->algoritmo_planificacion = config_get_string_value(config , "ALGORITMO_PLANIFICACION");
-	configuraciones->estimacion_inicial = config_get_int_value(config , "ESTIMACION_INICIAL");
-	configuraciones->alfa = config_get_double_value(config , "ALFA");
-	configuraciones->grado_multiprogramacion = config_get_int_value(config , "GRADO_MULTIPROGRAMACION");
-	configuraciones->tiempo_max_bloqueado = config_get_int_value(config , "TIEMPO_MAXIMO_BLOQUEADO");
+    configuraciones->ip_memoria = config_get_string_value(config , "IP_MEMORIA");
+    configuraciones->puerto_memoria = config_get_string_value(config , "PUERTO_MEMORIA");
+    configuraciones->ip_cpu = config_get_string_value(config , "IP_CPU");
+    configuraciones->puerto_cpu_dispatch = config_get_string_value(config , "PUERTO_CPU_DISPATCH");
+    configuraciones->puerto_cpu_interrupt = config_get_string_value(config , "PUERTO_CPU_INTERRUPT");
+    configuraciones->puerto_escucha = config_get_string_value(config , "PUERTO_ESCUCHA");
+    configuraciones->algoritmo_planificacion = config_get_string_value(config , "ALGORITMO_PLANIFICACION");
+    configuraciones->estimacion_inicial = config_get_int_value(config , "ESTIMACION_INICIAL");
+    configuraciones->alfa = config_get_double_value(config , "ALFA");
+    configuraciones->grado_multiprogramacion = config_get_int_value(config , "GRADO_MULTIPROGRAMACION");
+    configuraciones->tiempo_max_bloqueado = config_get_int_value(config , "TIEMPO_MAXIMO_BLOQUEADO");
 }
 
 void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* configuraciones , int servidor){
