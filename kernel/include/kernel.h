@@ -18,8 +18,8 @@ typedef struct configuraciones {
     char *ip_memoria;
     u_int16_t puerto_memoria;
     char *ip_cpu;
-    u_int16_t puerto_cpu_dispatch;
-    u_int16_t puerto_cpu_interrupt;
+    char *puerto_cpu_dispatch;
+    char *puerto_cpu_interrupt;
     char *puerto_escucha;
     char *algoritmo_planificacion;
     u_int16_t estimacion_inicial;
@@ -52,6 +52,12 @@ typedef struct planificador_struct {
 * @DESC: lee los datos del paquete e interpreta las instrucciones para crear el pcb correspondiente
 */
 t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger);
+
+/**
+* @NAME: enviar_pcb
+* @DESC: Envia el pcb recibido a cpu
+*/
+void enviar_pcb(t_pcb* pcb, t_log* logger,t_configuraciones* configuraciones);
 
 /**
 * @NAME: manejar_conexion

@@ -34,6 +34,7 @@ void leer_config(t_config* config, t_configuraciones* configuraciones);
 */
 void leer_file(char* path,t_log* logger);
 
+
 /**
 * @NAME: liberar_memoria
 * @DESC: libera la memoria usada en este modulo.
@@ -45,5 +46,15 @@ void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* config
 * @DESC: libera la memoria usada de nombre structura para almacenar los valores obtenidos del config.
 */
 void nombre_free(t_configuraciones* configuraciones);
+
+t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
+
+t_pcb* recibir_pcb(char* buffer);
+
+int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones);
+
+int hay_interrupcion();
+
+void devolver_pcb(t_pcb* pcb,t_log* logger);
 
 #endif
