@@ -58,7 +58,7 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger);
 * @NAME: enviar_pcb
 * @DESC: Envia el pcb recibido a cpu
 */
-void enviar_pcb(t_pcb* pcb, t_log* logger,t_configuraciones* configuraciones);
+void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb);
 
 /**
 * @NAME: manejar_conexion

@@ -35,10 +35,6 @@ void planificador_largo_plazo(void* arg){
 
 void planificador_corto_plazo(void* arg){
 	struct planificador_struct *p;
-	t_log* logger = log_create("./kernel.log","KERNEL", false , LOG_LEVEL_DEBUG);
-	t_config* config = config_create("./kernel.conf");
-    t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
-    leer_config(config,configuraciones);
 	p = (struct planificador_struct*) arg;
 	while(1){
 		sleep(3);
@@ -48,12 +44,9 @@ void planificador_corto_plazo(void* arg){
 			t_pcb* pcb = queue_pop(p->colas->cola_ready);
 			queue_push(p->colas->cola_exec,pcb);
 			printf("Se agrego un proceso a la cola EXEC\n");
-			enviar_pcb(pcb,logger,configuraciones);
+			enviar_pcb(p->logger,p->configuraciones,pcb);
 		}
 	}
-	log_destroy(logger);
-    config_destroy(config);
-    configuraciones_free(configuraciones);
 }
 
 t_colas_struct* crear_colas(){
@@ -95,7 +88,7 @@ void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pc
 	pcb->tabla_paginas = tabla_paginas;
 }
 void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb){
-	 t_paquete* paquete = crear_paquete();
+	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = INICIAR_PROCESO;
     int cantidad_enteros = list_size(pcb->lista_instrucciones);
     printf("El process enviado a cpu es: %d\n",pcb->pid);
@@ -136,7 +129,6 @@ int atender_cliente(void* arg){
 			log_warning(p->logger,"Operacion desconocida");
 			break;
 		}
-		free(cod_op);
 	}
 	return EXIT_SUCCESS;	
 }
@@ -220,8 +212,6 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){
 		}else if(x==EXIT){
 			list_add(lista,x);
 		}
-		free(i);
-		free(x);
 	}
 	log_info(logger,"Decodificacion finalizada\n");
 	t_pcb* pcb = malloc(sizeof(t_pcb));
@@ -233,27 +223,6 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){
 	pcb->alfa = configuraciones->alfa;
 	pcb->estado = NEW;
 	return pcb; 
-}
-
-void enviar_pcb(t_pcb* pcb, t_log* logger,t_configuraciones* configuraciones){
-    t_paquete* paquete = crear_paquete();
-    paquete->codigo_operacion = INICIAR_PROCESO;
-    int cantidad_enteros = list_size(pcb->lista_instrucciones);
-    printf("El process enviado a cpu es: %d\n",pcb->pid);
-    agregar_entero_a_paquete(paquete,pcb->pid);
-    agregar_entero_a_paquete(paquete,pcb->pc);
-    agregar_entero_a_paquete(paquete,cantidad_enteros);
-    t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
-    while(list_iterator_has_next(iterator)){
-        int ins = list_iterator_next(iterator);
-        printf("El entero es: %d\n",ins);
-        agregar_entero_a_paquete(paquete,ins);
-    }
-    list_iterator_destroy(iterator);
-    int conexion = crear_conexion(logger , "CPU" , configuraciones->ip_cpu ,configuraciones->puerto_cpu_dispatch);
-    enviar_paquete(paquete,conexion);
-    eliminar_paquete(paquete);
-    close(conexion);
 }
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
