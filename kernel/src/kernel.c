@@ -105,7 +105,10 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb){
     int conexion = crear_conexion(logger , "CPU" , configuraciones->ip_cpu ,configuraciones->puerto_cpu_dispatch);
     enviar_paquete(paquete,conexion);
     eliminar_paquete(paquete);
-    close(conexion);
+	int codigoOperacion = recibir_operacion(conexion);
+	int size;
+    char * buffer = recibir_buffer(&size, conexion);
+	log_info(logger,"RECIBI LA RESPUESTA");
 }
 int atender_cliente(void* arg){
 	struct hilo_struct *p;

@@ -8,6 +8,7 @@
 #include <shared/utils.h>
 #include <shared/socket.h>
 #include <shared/client.h>
+#include <shared/server.h>
 #include <commons/collections/list.h>
 
 typedef struct configuraciones {
@@ -55,6 +56,6 @@ int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones);
 
 int hay_interrupcion();
 
-void devolver_pcb(t_pcb* pcb,t_log* logger);
+void devolver_pcb(t_pcb* pcb,t_log* logger,int socket);
 
 #endif

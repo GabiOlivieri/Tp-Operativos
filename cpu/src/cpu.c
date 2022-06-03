@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
        			t_pcb* pcb = recibir_pcb(buffer);
        			while (!hay_interrupcion() && instruccion != EXIT && instruccion != IO){
     			instruccion = ejecutar_instruccion(pcb,configuraciones);}
-       			devolver_pcb(pcb,logger);
+       			devolver_pcb(pcb,logger,client_socket);
     			break;
 			
     		case -1:
@@ -74,7 +74,7 @@ int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones){
 
 }
 
-void devolver_pcb(t_pcb* pcb,t_log* logger){
+void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = DEVOLVER_PROCESO;
     int cantidad_enteros = list_size(pcb->lista_instrucciones);
@@ -89,10 +89,8 @@ void devolver_pcb(t_pcb* pcb,t_log* logger){
         agregar_entero_a_paquete(paquete,ins);
     }
     list_iterator_destroy(iterator);
-    int conexion = crear_conexion(logger , "CPU" , "127.0.0.1" , "8000" );
-    enviar_paquete(paquete,conexion);
+    enviar_paquete(paquete,socket);
     eliminar_paquete(paquete);
-    close(conexion);
 }
 
 
