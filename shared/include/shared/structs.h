@@ -8,8 +8,8 @@ typedef enum
 	MENSAJE,
 	PAQUETE,
 	INICIAR_PROCESO,
-	INICIAR_ESTRUCTURAS
-  DEVOLVER_PROCESO
+	INICIAR_ESTRUCTURAS,
+    DEVOLVER_PROCESO
 } op_code;
 
 typedef enum
@@ -50,7 +50,8 @@ typedef struct
     int pc;
     t_list* lista_instrucciones;
     int tabla_paginas; //Inchequeable
-    int estimacion_inicial;
+    float estimacion_inicial;
+    int rafaga_anterior;
     float alfa;
     estado estado;
 }t_pcb;
