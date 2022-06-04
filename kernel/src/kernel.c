@@ -45,7 +45,6 @@ void planificador_corto_plazo(void* arg){
 			printf("La cola READY tiene %d procesos para ejecutar\n",size);
 		}else{
 			t_queue* aux = queue_create();
-			t_pcb* pcb2 = malloc(sizeof(t_pcb));
 			float aux1,aux2;
 			int size = queue_size(p->colas->cola_ready);
 			printf("La cola READY tiene %d procesos para ejecutar\n",size);
@@ -55,15 +54,18 @@ void planificador_corto_plazo(void* arg){
 				printf("Entro al for por %d vez \n", i);
 
 				aux1 = elegido->alfa * elegido->rafaga_anterior + (1 - elegido->alfa) * elegido->estimacion_inicial;
-				pcb2 = queue_pop(p->colas->cola_ready);
+				t_pcb* pcb2 = queue_pop(p->colas->cola_ready);
 				aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_inicial;
 
-				if (aux1 > aux2)
-						queue_push(aux,pcb2);
+				if (aux2 > aux1){
+						printf("El pcb %d tiene mas pioridad %f que %d con pioridad %f\n",elegido->pid,aux1,pcb2->pid,aux2);
+						queue_push(aux,pcb2);}
 					
 				else {
+						printf("Un pcb %d tiene mas pioridad %f que %d con pioridad %f\n",pcb2->pid,aux2,elegido->pid,aux1);
 						queue_push(aux,elegido);
 						elegido = pcb2;
+						printf("El elegido pasa a ser %d", elegido->pid);
 					}
 				}
 				queue_push(aux,elegido);
