@@ -9,9 +9,10 @@
 #include <shared/client.h>
 #include <commons/collections/list.h>
 #include <commons/config.h>
+#include <shared/utils.h>
 #include <commons/collections/queue.h>
 #include <pthread.h>
-#include<unistd.h>
+#include <unistd.h>
 #include <semaphore.h>
 
 

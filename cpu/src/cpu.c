@@ -5,51 +5,60 @@ int main(int argc, char* argv[]) {
     t_config* config = config_create("./cpu.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
-
-    char* config_properties[] = {
-            "IP_KERNEL",
-            "PUERTO_KERNEL",
-        };
-
     leer_config(config,configuraciones);
 
     int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
-    int client_socket = esperar_cliente(logger , "CPU Dispatch" , servidor);
+    manejar_conexion(logger,configuraciones,servidor);
+    liberar_memoria(logger,config,configuraciones,servidor);
+    return 0;
+}
 
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket){
+   	while(1){
+        int client_socket = esperar_cliente(logger , "CPU Dispatch" , socket);
+		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
+		hilo->logger = logger;
+		hilo->socket = client_socket;
+		hilo->configuraciones = configuraciones;
+        pthread_t hilo_servidor;
+        pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
+        pthread_detach(hilo_servidor);  
+    }	
+}
 
-    t_list* lista;
-        while (client_socket != -1 ) {
-    		int cod_op = recibir_operacion(client_socket);
-    		switch (cod_op) {
+int atender_cliente(void* arg){
+	struct hilo_struct *p;
+	p = (struct hilo_struct*) arg;
+	while (1){
+		int cod_op = recibir_operacion(p->socket);
+		switch (cod_op) {
     		case MENSAJE:
-    			recibir_mensaje(client_socket , logger);
+    			recibir_mensaje(p->socket , p->logger);
     			break;
     		case PAQUETE:
-    			log_info(logger, "Me llegaron los siguientes valores:\n");
+    			log_info(p->logger, "Me llegaron los siguientes valores:\n");
     			break;
 
     		case INICIAR_PROCESO:
-    			log_info(logger, "Me llego un INICIAR_PROCESO\n");
+    			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
     			int instruccion=0;
     			int size;
-       			char * buffer = recibir_buffer(&size, client_socket);
+       			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
        			while (!hay_interrupcion() && instruccion != EXIT && instruccion != IO){
-    			instruccion = ejecutar_instruccion(pcb,configuraciones);}
-       			devolver_pcb(pcb,logger,client_socket);
+    			instruccion = ejecutar_instruccion(pcb,p->configuraciones);}
+       			devolver_pcb(pcb,p->logger,p->socket);
     			break;
 			
     		case -1:
-    			log_error(logger, "el cliente se desconecto. Terminando servidor");
+    			log_error(p->logger, "el cliente se desconecto. Terminando servidor");
     			return EXIT_FAILURE;
     		default:
-    			log_warning(logger,"Operacion desconocida. No quieras meter la pata");
+    			log_warning(p->logger,"Operacion desconocida. No quieras meter la pata");
     			break;
     		}
-    	}
-        liberar_memoria(logger,config,configuraciones,servidor);
-
-    return 0;
+	}
+	return EXIT_SUCCESS;	
 }
 
 int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones){

@@ -10,6 +10,10 @@
 #include <shared/client.h>
 #include <shared/server.h>
 #include <commons/collections/list.h>
+#include <commons/collections/queue.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <semaphore.h>
 
 typedef struct configuraciones {
     char *ip_memoria;
@@ -21,6 +25,12 @@ typedef struct configuraciones {
     char *puerto_escucha_dispatch;
     char *puerto_escucha_interrupt;
 } t_configuraciones;
+
+typedef struct hilo_struct {
+    int socket;
+    t_log* logger;
+    t_configuraciones* configuraciones;
+} t_hilo_struct;
 
 
 /**
@@ -57,5 +67,9 @@ int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones);
 int hay_interrupcion();
 
 void devolver_pcb(t_pcb* pcb,t_log* logger,int socket);
+
+int atender_cliente(void* arg);
+
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket);
 
 #endif
