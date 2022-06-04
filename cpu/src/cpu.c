@@ -53,7 +53,7 @@ int atender_cliente(void* arg){
 				time_t end = time(NULL);
 				printf("Tardó %d segundos \n", (end - begin) );
 				pcb->rafaga_anterior= (end - begin);
-				printf("Voy a devolver pcb\n");
+				//printf("Voy a devolver pcb\n");
        			devolver_pcb(pcb,p->logger,p->socket);
     			break;
 			
@@ -69,21 +69,19 @@ int atender_cliente(void* arg){
 }
 
 int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones){
-		printf("Ejecuta instrucción\n");
 		int x = list_get(pcb->lista_instrucciones,pcb->pc);
 		if (x==NO_OP) {
-			printf("Llegó un NO_OP %d\n",x);
+			printf("Eecuto un NO_OP\n");
 			sleep(configuraciones->retardo_NOOP);
 		}
 		else if (x==IO){
-			printf("Llegó un IO %d\n",x);
 			pcb->pc++;
 			int y = list_get(pcb->lista_instrucciones,pcb->pc);
-			printf("El argumento recibido es %d\n",y);
+			printf("Eecuto un IO de argumento %d\n",y);
 			pcb->estado = BLOCKED;
 		}
 		else if (x==EXIT) {
-			printf("Llegó un EXIT %d\n",x);
+			printf("Eecuto un EXIT\n");
 			pcb->estado = TERMINATED;
 			return x;}
 		pcb->pc++;
@@ -95,14 +93,13 @@ void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = DEVOLVER_PROCESO;
     int cantidad_enteros = list_size(pcb->lista_instrucciones);
-    printf("El process enviado a kernel es: %d\n",pcb->pid);
+    printf("Devuelvo proceso a Kernel\n");
     agregar_entero_a_paquete(paquete,pcb->pc);
     agregar_entero_a_paquete(paquete,pcb->estado);
 	agregar_entero_a_paquete(paquete,pcb->rafaga_anterior);
     t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
     while(list_iterator_has_next(iterator)){
         int ins = list_iterator_next(iterator);
-        printf("El entero es: %d\n",ins);
         agregar_entero_a_paquete(paquete,ins);
     }
     list_iterator_destroy(iterator);
@@ -119,14 +116,10 @@ int hay_interrupcion(){
 t_pcb* recibir_pcb(char* buffer){
 	t_pcb* pcb = malloc(sizeof(t_pcb));
 	pcb->pid = leer_entero(buffer,0); //Variable global que se incrementa
-	printf("El id de pcb recibido es: %d\n",pcb->pid);
 	pcb->pc = leer_entero(buffer,1);
-	printf("El pc recibido es: %d\n",pcb->pc);
+	printf("El Process Id del pcb recibido es: %d y su Program Counter es: %d\n",pcb->pid,pcb->pc);
 	pcb->estado = RUNNING;
-
 	pcb->lista_instrucciones = obtener_lista_instrucciones(buffer,pcb);
-
-	printf("Retorno pcb\n ");
 	return pcb;
 }
 
@@ -134,22 +127,21 @@ t_pcb* recibir_pcb(char* buffer){
 
 t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb){
 	t_list* lista = list_create();
-			int aux = pcb->pc + 3;
+			int aux = 3;
 			int cantidad_enteros = 3 + leer_entero(buffer,2);
-			printf("La cantidad de enteros es: %d\n",cantidad_enteros);
+			printf("La lista de instrucciones contiene: \n");
 			for(; aux <= cantidad_enteros;aux++){
 				int x = leer_entero(buffer,aux);
 				void* id = malloc(sizeof(int));
 				id = (void*)(&x);
 				if(x==NO_OP){
-					printf("Me llego un %d por lo que es un NO_OP\n",x);
+					printf("NO_OP\n");
 					list_add(lista,0);
 				}else if(x==IO){
-					printf("Me llego un %d por lo que es un IO\n",x);
 					list_add(lista,1);
 					aux++;
 					int y = leer_entero(buffer,aux);
-					printf("Me llego un parametro: %d \n",y);
+					printf("IO %d \n",y);
 					list_add(lista,y);
 				}else if(x==READ){
 					printf("Me llego un %d por lo que es un READ\n",x);
@@ -191,7 +183,7 @@ t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb){
 					printf("Me llego un parametro: %d \n",z);
 					list_add(lista,parametro1);
 				}else if(x==EXIT){
-					printf("Me llego un %d por lo que es un EXIT\n",x);
+					printf("EXIT\n",x);
 					list_add(lista,5);
 				}
 			}

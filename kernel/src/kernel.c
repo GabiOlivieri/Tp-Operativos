@@ -8,6 +8,7 @@ int main(int argc, char* argv[]) {
 	t_config* config = config_create("./kernel.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
     leer_config(config,configuraciones);
+	printf("El Algoritmo Planificacion elegido es %s\n",configuraciones->algoritmo_planificacion);
 	t_colas_struct* colas = crear_colas();
 	crear_planificadores(logger,configuraciones,colas);
 	int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
@@ -40,13 +41,11 @@ void planificador_corto_plazo(void* arg){
 		sleep(3);
 		if(!queue_is_empty(p->colas->cola_ready)&&queue_is_empty(p->colas->cola_exec)){
 		if( strcmp(p->configuraciones->algoritmo_planificacion,"FIFO") == 0 ){
-			printf("El Algoritmo Planificador elegido es FIFO\n");
 			int size = queue_size(p->colas->cola_ready);
 			printf("La cola READY tiene %d procesos para ejecutar\n",size);
 		}else{
 			t_queue* aux = queue_create();
 			float aux1,aux2;
-			printf("El Algoritmo Planificador elegido es SRT\n");
 			int size = queue_size(p->colas->cola_ready);
 			printf("La cola READY tiene %d procesos para ejecutar\n",size);
 			if(size > 1){
@@ -69,7 +68,6 @@ void planificador_corto_plazo(void* arg){
 				}
 			}
 			t_pcb* pcb = queue_pop(p->colas->cola_ready);
-			procesos_en_memoria--;
 			queue_push(p->colas->cola_exec,pcb);
 			printf("Se agrego un proceso a la cola EXEC\n");
 			enviar_pcb(p->logger,p->configuraciones,pcb,p->colas);
@@ -121,14 +119,13 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb,t_c
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = INICIAR_PROCESO;
     int cantidad_enteros = list_size(pcb->lista_instrucciones);
-    printf("El process enviado a cpu es: %d\n",pcb->pid);
+    printf("El proceso %d es enviado a cpu\n",pcb->pid);
     agregar_entero_a_paquete(paquete,pcb->pid);
     agregar_entero_a_paquete(paquete,pcb->pc);
     agregar_entero_a_paquete(paquete,cantidad_enteros);
     t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
     while(list_iterator_has_next(iterator)){
         int ins = list_iterator_next(iterator);
-        printf("El entero es: %d\n",ins);
         agregar_entero_a_paquete(paquete,ins);
     }
     list_iterator_destroy(iterator);
@@ -154,11 +151,15 @@ void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logge
 	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
 	if(estado == BLOCKED){
 		log_info(logger,"El proceso %d es enviado a memoria swap\n",pcb->pid);
+		printf("El proceso %d pasa a la cola BLOCK\n",pcb->pid);
+		sleep(3);
+		printf("El proceso %d sale de la cola BLOCK\n",pcb->pid);
 		queue_push(colas->cola_ready,pcb);
 		}
-	else if (estado == TERMINATED)
+	else if (estado == TERMINATED){
 		log_info(logger, "El proceso %d terminó", pcb->pid);
-
+		printf("El proceso %d terminó y la cantidad de procesos en memoria ahora es %d\n", pcb->pid,--procesos_en_memoria);
+	}
 }
 
 int atender_cliente(void* arg){
@@ -231,15 +232,13 @@ void recibir_pcb_de_cpu(t_log* logger,int client_socket, t_configuraciones* conf
 	actualizar_pcb(buffer,configuraciones,logger,colas); //Dejar esto mas lindo
 }
 
-
-
-
 void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones,t_queue* cola_new){
 	log_info(logger,"Recibi un INICIAR_PROCESO desde consola\n");	
 	int size;
    	char * buffer = recibir_buffer(&size, client_socket);
 	t_pcb* pcb  = crear_pcb(buffer,configuraciones,logger);
-	log_info(logger,"Se creo el PCB con pid=%d y tamaño=%d\n",pcb->pid,pcb->size);
+	log_info(logger,"Se creo el PCB con Process Id: %d y Tamaño: %d\n",pcb->pid,pcb->size);
+	printf("Se agrego un proceso a la cola NEW\n");
 	queue_push(cola_new,pcb);
 }
 
