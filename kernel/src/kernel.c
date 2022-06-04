@@ -45,15 +45,17 @@ void planificador_corto_plazo(void* arg){
 			printf("La cola READY tiene %d procesos para ejecutar\n",size);
 		}else{
 			t_queue* aux = queue_create();
+			t_pcb* pcb2 = malloc(sizeof(t_pcb));
 			float aux1,aux2;
 			int size = queue_size(p->colas->cola_ready);
 			printf("La cola READY tiene %d procesos para ejecutar\n",size);
 			if(size > 1){
 				t_pcb* elegido = queue_pop(p->colas->cola_ready);
-				aux1 = elegido->alfa * elegido->rafaga_anterior + (1 - elegido->alfa) * elegido->estimacion_inicial;
-			for(int i = 0; i<=size; i++){
+			for(int i = 0; i<(size-1); i++){
+				printf("Entro al for por %d vez \n", i);
 
-				t_pcb* pcb2 = queue_pop(p->colas->cola_ready);
+				aux1 = elegido->alfa * elegido->rafaga_anterior + (1 - elegido->alfa) * elegido->estimacion_inicial;
+				pcb2 = queue_pop(p->colas->cola_ready);
 				aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_inicial;
 
 				if (aux1 > aux2)
@@ -64,6 +66,7 @@ void planificador_corto_plazo(void* arg){
 						elegido = pcb2;
 					}
 				}
+				queue_push(aux,elegido);
 				p->colas->cola_ready = aux;
 				}
 			}
