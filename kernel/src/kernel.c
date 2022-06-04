@@ -39,15 +39,45 @@ void planificador_corto_plazo(void* arg){
 	while(1){
 		sleep(3);
 		if(!queue_is_empty(p->colas->cola_ready)&&queue_is_empty(p->colas->cola_exec)){
+		if( strcmp(p->configuraciones->algoritmo_planificacion,"FIFO") == 0 ){
+			printf("El Algoritmo Planificador elegido es FIFO\n");
 			int size = queue_size(p->colas->cola_ready);
 			printf("La cola READY tiene %d procesos para ejecutar\n",size);
+		}else{
+			t_queue* aux = queue_create();
+			float aux1,aux2;
+			printf("El Algoritmo Planificador elegido es SRT\n");
+			int size = queue_size(p->colas->cola_ready);
+			printf("La cola READY tiene %d procesos para ejecutar\n",size);
+			if(size > 1){
+				t_pcb* elegido = queue_pop(p->colas->cola_ready);
+				aux1 = elegido->alfa * elegido->rafaga_anterior + (1 - elegido->alfa) * elegido->estimacion_inicial;
+			for(int i = 0; i<=size; i++){
+
+				t_pcb* pcb2 = queue_pop(p->colas->cola_ready);
+				aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_inicial;
+
+				if (aux1 > aux2)
+						queue_push(aux,pcb2);
+					
+				else {
+						queue_push(aux,elegido);
+						elegido = pcb2;
+					}
+				}
+				p->colas->cola_ready = aux;
+				}
+			}
 			t_pcb* pcb = queue_pop(p->colas->cola_ready);
+			procesos_en_memoria--;
 			queue_push(p->colas->cola_exec,pcb);
 			printf("Se agrego un proceso a la cola EXEC\n");
-			enviar_pcb(p->logger,p->configuraciones,pcb); 
+			enviar_pcb(p->logger,p->configuraciones,pcb,p->colas);
 		}
 	}
 }
+
+
 
 t_colas_struct* crear_colas(){
 	t_colas_struct* colas = malloc(sizeof(t_colas_struct));
@@ -87,7 +117,7 @@ void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pc
 	int tabla_paginas = leer_entero(buffer,0);
 	pcb->tabla_paginas = tabla_paginas;
 }
-void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb){
+void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb,t_colas_struct* colas){
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = INICIAR_PROCESO;
     int cantidad_enteros = list_size(pcb->lista_instrucciones);
@@ -108,8 +138,29 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb){
 	int codigoOperacion = recibir_operacion(conexion);
 	int size;
     char * buffer = recibir_buffer(&size, conexion);
-	log_info(logger,"RECIBI LA RESPUESTA");
+	actualizar_pcb(buffer,configuraciones,logger,colas);
 }
+
+void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger,t_colas_struct* colas){
+	log_info(logger,"Decodificando paquete\n");
+	int pc = leer_entero(buffer,0);
+	int estado = leer_entero(buffer,1);
+	int rafaga_anterior = leer_entero(buffer,2);
+	log_info(logger,"Decodificacion finalizada\n");
+	t_pcb* pcb = queue_pop(colas->cola_exec);
+	pcb->pc=pc;
+	pcb->estado=estado;
+	pcb->rafaga_anterior=rafaga_anterior;
+	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
+	if(estado == BLOCKED){
+		log_info(logger,"El proceso %d es enviado a memoria swap\n",pcb->pid);
+		queue_push(colas->cola_ready,pcb);
+		}
+	else if (estado == TERMINATED)
+		log_info(logger, "El proceso %d terminó", pcb->pid);
+
+}
+
 int atender_cliente(void* arg){
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;
@@ -173,21 +224,14 @@ int atender_cpu(void* arg){
 	return EXIT_SUCCESS;
 }
 
-void recibir_pcb_de_cpu(t_log* logger,int client_socket, t_configuraciones* configuraciones){
+void recibir_pcb_de_cpu(t_log* logger,int client_socket, t_configuraciones* configuraciones,t_colas_struct* colas){
 	log_info(logger,"Devolvieron un proceso desde cpu\n");	
 	int size;
    	char * buffer = recibir_buffer(&size, client_socket);
-	actualizar_pcb(buffer,configuraciones,logger); //Dejar esto mas lindo
+	actualizar_pcb(buffer,configuraciones,logger,colas); //Dejar esto mas lindo
 }
 
-void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){
-	log_info(logger,"Decodificando paquete\n");
-	t_list* lista = list_create();
-	int pcbid = leer_entero(buffer,0);
-	int estado = leer_entero(buffer,2);
-	printf("El proceso %d tiene estado %d",pcbid,estado);
-	log_info(logger,"Decodificacion finalizada\n");
-}
+
 
 
 void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones,t_queue* cola_new){
@@ -248,6 +292,7 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){
 	pcb->estimacion_inicial = configuraciones->estimacion_inicial;
 	pcb->alfa = configuraciones->alfa;
 	pcb->estado = NEW;
+	pcb->rafaga_anterior = 0;
 	return pcb; 
 }
 

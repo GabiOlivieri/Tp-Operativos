@@ -1,5 +1,6 @@
 #include<cpu.h>
 
+
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
     t_config* config = config_create("./cpu.conf");
@@ -43,10 +44,16 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
     			int instruccion=0;
     			int size;
+				time_t begin = time(NULL);
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
        			while (!hay_interrupcion() && instruccion != EXIT && instruccion != IO){
-    			instruccion = ejecutar_instruccion(pcb,p->configuraciones);}
+    			instruccion = ejecutar_instruccion(pcb,p->configuraciones);
+				}
+				time_t end = time(NULL);
+				printf("Tardó %d segundos \n", (end - begin) );
+				pcb->rafaga_anterior= (end - begin);
+				printf("Voy a devolver pcb\n");
        			devolver_pcb(pcb,p->logger,p->socket);
     			break;
 			
@@ -76,6 +83,7 @@ int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones){
 			pcb->estado = BLOCKED;
 		}
 		else if (x==EXIT) {
+			printf("Llegó un EXIT %d\n",x);
 			pcb->estado = TERMINATED;
 			return x;}
 		pcb->pc++;
@@ -88,9 +96,9 @@ void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
     paquete->codigo_operacion = DEVOLVER_PROCESO;
     int cantidad_enteros = list_size(pcb->lista_instrucciones);
     printf("El process enviado a kernel es: %d\n",pcb->pid);
-    agregar_entero_a_paquete(paquete,pcb->pid);
     agregar_entero_a_paquete(paquete,pcb->pc);
     agregar_entero_a_paquete(paquete,pcb->estado);
+	agregar_entero_a_paquete(paquete,pcb->rafaga_anterior);
     t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
     while(list_iterator_has_next(iterator)){
         int ins = list_iterator_next(iterator);
@@ -118,6 +126,7 @@ t_pcb* recibir_pcb(char* buffer){
 
 	pcb->lista_instrucciones = obtener_lista_instrucciones(buffer,pcb);
 
+	printf("Retorno pcb\n ");
 	return pcb;
 }
 

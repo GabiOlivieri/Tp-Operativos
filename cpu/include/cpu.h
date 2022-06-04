@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include <time.h>
 
 typedef struct configuraciones {
     char *ip_memoria;
