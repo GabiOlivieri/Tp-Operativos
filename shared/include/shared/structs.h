@@ -53,6 +53,7 @@ typedef struct
     float estimacion_inicial;
     int rafaga_anterior;
     float alfa;
+    int tiempo_bloqueo;
     estado estado;
 }t_pcb;
 

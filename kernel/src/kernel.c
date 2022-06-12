@@ -296,6 +296,7 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){
 	pcb->estimacion_inicial = configuraciones->estimacion_inicial;
 	pcb->alfa = configuraciones->alfa;
 	pcb->estado = NEW;
+	pcb->tiempo_bloqueo= 0;
 	pcb->rafaga_anterior = 0;
 	return pcb; 
 }

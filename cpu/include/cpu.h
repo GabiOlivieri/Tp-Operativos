@@ -1,5 +1,5 @@
-#ifndef PROJECT_CONSOLA_H_
-#define PROJECT_CONSOLA_H_
+#ifndef PROJECT_CPU_H_
+#define PROJECT_CPU_H_
 
 #include <stdlib.h>
 #include <stdio.h>

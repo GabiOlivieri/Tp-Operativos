@@ -78,6 +78,7 @@ int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones){
 			pcb->pc++;
 			int y = list_get(pcb->lista_instrucciones,pcb->pc);
 			printf("Eecuto un IO de argumento %d\n",y);
+			pcb->tiempo_bloqueo= y;
 			pcb->estado = BLOCKED;
 		}
 		else if (x==EXIT) {
@@ -196,7 +197,7 @@ void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->reemplazo_TLB = config_get_string_value(config , "REEMPLAZO_TLB");
 	configuraciones->retardo_NOOP = config_get_int_value(config , "RETARDO_NOOP");
 	configuraciones->ip_memoria = config_get_string_value(config , "IP_MEMORIA");
-	configuraciones->puerto_memoria = config_get_int_value(config , "PUERTO_MEMORIA");
+	configuraciones->puerto_memoria = config_get_string_value(config , "PUERTO_MEMORIA");
 	configuraciones->puerto_escucha_dispatch = config_get_string_value(config , "PUERTO_ESCUCHA_DISPATCH");
 	configuraciones->puerto_escucha_interrupt = config_get_string_value(config , "PUERTO_ESCUCHA_INTERRUPT");
 }
