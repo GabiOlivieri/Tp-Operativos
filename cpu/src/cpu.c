@@ -97,6 +97,7 @@ void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
     printf("Devuelvo proceso a Kernel\n");
     agregar_entero_a_paquete(paquete,pcb->pc);
     agregar_entero_a_paquete(paquete,pcb->estado);
+	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
 	agregar_entero_a_paquete(paquete,pcb->rafaga_anterior);
     t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
     while(list_iterator_has_next(iterator)){
@@ -120,6 +121,7 @@ t_pcb* recibir_pcb(char* buffer){
 	pcb->pc = leer_entero(buffer,1);
 	printf("El Process Id del pcb recibido es: %d y su Program Counter es: %d\n",pcb->pid,pcb->pc);
 	pcb->estado = RUNNING;
+	pcb->tiempo_bloqueo = 0;
 	pcb->lista_instrucciones = obtener_lista_instrucciones(buffer,pcb);
 	return pcb;
 }

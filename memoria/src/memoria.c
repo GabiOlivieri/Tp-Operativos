@@ -63,95 +63,21 @@ int atender_cliente(void* arg){
 void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = DEVOLVER_PROCESO;
-    int cantidad_enteros = list_size(pcb->lista_instrucciones);
-    printf("Devuelvo proceso a Kernel\n");
-    agregar_entero_a_paquete(paquete,pcb->pc);
-    agregar_entero_a_paquete(paquete,pcb->estado);
-	agregar_entero_a_paquete(paquete,pcb->rafaga_anterior);
-    t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
-    while(list_iterator_has_next(iterator)){
-        int ins = list_iterator_next(iterator);
-        agregar_entero_a_paquete(paquete,ins);
-    }
-    list_iterator_destroy(iterator);
+    printf("El proceso se desbloquea y vuelve a kernel\n");
+    agregar_entero_a_paquete(paquete,pcb->pid);
     enviar_paquete(paquete,socket);
     eliminar_paquete(paquete);
 }
 
 t_pcb* recibir_pcb(char* buffer){
 	t_pcb* pcb = malloc(sizeof(t_pcb));
-	pcb->pid = leer_entero(buffer,0); //Variable global que se incrementa
-	pcb->pc = leer_entero(buffer,1);
-	printf("El Process Id del pcb recibido es: %d y se va a quedar: %d \n",pcb->pid,pcb->pc);
-	pcb->estado = RUNNING;
-	pcb->lista_instrucciones = obtener_lista_instrucciones(buffer,pcb);
+	pcb->pid = leer_entero(buffer,0);
+	pcb->tiempo_bloqueo = leer_entero(buffer,1);
+	printf("El Process Id del pcb recibido es: %d y se va a quedar: %d \n",pcb->pid,pcb->tiempo_bloqueo);
+    sleep(pcb->tiempo_bloqueo);
 	return pcb;
 }
 
-t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb){
-	t_list* lista = list_create();
-			int aux = 3;
-			int cantidad_enteros = 3 + leer_entero(buffer,2);
-			printf("La lista de instrucciones contiene: \n");
-			for(; aux <= cantidad_enteros;aux++){
-				int x = leer_entero(buffer,aux);
-				void* id = malloc(sizeof(int));
-				id = (void*)(&x);
-				if(x==NO_OP){
-					printf("NO_OP\n");
-					list_add(lista,0);
-				}else if(x==IO){
-					list_add(lista,1);
-					aux++;
-					int y = leer_entero(buffer,aux);
-					printf("IO %d \n",y);
-					list_add(lista,y);
-				}else if(x==READ){
-					printf("Me llego un %d por lo que es un READ\n",x);
-					list_add(lista,id);
-					aux++;
-					int y = leer_entero(buffer,aux);
-					void* parametro = malloc(sizeof(int));
-					parametro = (void*)(&y);
-					printf("Me llego un parametro: %d \n",y);
-					list_add(lista,parametro);
-				}else if(x==WRITE){
-					printf("Me llego un %d por lo que es un WRITE\n",x);
-					list_add(lista,id);
-					aux++;
-					int y = leer_entero(buffer,aux);
-					void* parametro = malloc(sizeof(int));
-					parametro = (void*)(&y);
-					printf("Me llego un parametro: %d \n",y);
-					list_add(lista,parametro);
-					aux++;
-					int z = leer_entero(buffer,aux);
-					void* parametro1 = malloc(sizeof(int));
-					parametro1 = (void*)(&z);
-					printf("Me llego un parametro: %d \n",z);
-					list_add(lista,parametro1);
-				}else if(x==COPY){
-					printf("Me llego un %d por lo que es un COPY\n",x);
-					list_add(lista,id);
-					aux++;
-					int y = leer_entero(buffer,aux);
-					void* parametro = malloc(sizeof(int));
-					parametro = (void*)(&y);
-					printf("Me llego un parametro: %d \n",y);
-					list_add(lista,parametro);
-					aux++;
-					int z = leer_entero(buffer,aux);
-					void* parametro1 = malloc(sizeof(int));
-					parametro1 = (void*)(&z);
-					printf("Me llego un parametro: %d \n",z);
-					list_add(lista,parametro1);
-				}else if(x==EXIT){
-					printf("EXIT\n",x);
-					list_add(lista,5);
-				}
-			}
-			return lista;
-}
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->puerto_escucha = config_get_string_value(config , "PUERTO_ESCUCHA");

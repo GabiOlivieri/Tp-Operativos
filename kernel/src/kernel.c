@@ -11,7 +11,7 @@ int main(int argc, char* argv[]) {
 	printf("El Algoritmo Planificacion elegido es %s\n",configuraciones->algoritmo_planificacion);
 	t_colas_struct* colas = crear_colas();
 	crear_planificadores(logger,configuraciones,colas);
-	int servidor = iniciar_servidor(logger , "un nombre" , "127.0.0.1" , configuraciones->puerto_escucha);
+	int servidor = iniciar_servidor(logger , "Kernel" , "127.0.0.1" , configuraciones->puerto_escucha);
 	manejar_conexion(logger,configuraciones,servidor,colas);
 	liberar_memoria(logger,config,configuraciones,servidor);
 	free(colas);
@@ -147,17 +147,27 @@ void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logge
 	log_info(logger,"Decodificando paquete\n");
 	int pc = leer_entero(buffer,0);
 	int estado = leer_entero(buffer,1);
-	int rafaga_anterior = leer_entero(buffer,2);
+	int tiempo_bloqueo = leer_entero(buffer,2);
+	int rafaga_anterior = leer_entero(buffer,3);
 	log_info(logger,"Decodificacion finalizada\n");
 	t_pcb* pcb = queue_pop(colas->cola_exec);
 	pcb->pc=pc;
 	pcb->estado=estado;
+	pcb->tiempo_bloqueo= tiempo_bloqueo;
 	pcb->rafaga_anterior=rafaga_anterior;
 	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
 	if(estado == BLOCKED){
-		log_info(logger,"El proceso %d es enviado a memoria swap\n",pcb->pid);
 		printf("El proceso %d pasa a la cola BLOCK\n",pcb->pid);
-		sleep(3);
+		t_paquete* paquete = crear_paquete();
+    	paquete->codigo_operacion = INICIAR_PROCESO;
+		int conexion = crear_conexion(logger , "Memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
+    	agregar_entero_a_paquete(paquete,pcb->pid);
+    	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
+		enviar_paquete(paquete,conexion);
+    	eliminar_paquete(paquete);
+		int codigoOperacion = recibir_operacion(conexion);
+		int size;
+    	char * buffer = recibir_buffer(&size, conexion);
 		printf("El proceso %d sale de la cola BLOCK\n",pcb->pid);
 		queue_push(colas->cola_ready,pcb);
 		}
