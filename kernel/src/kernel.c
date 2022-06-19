@@ -80,6 +80,45 @@ void planificador_corto_plazo(void* arg){
 	}
 }
 
+void planificador_mediano_plazo(void* arg){
+	struct planificador_struct *p;
+	p = (struct planificador_struct*) arg;
+	printf("Arrancó planificador de mediano plazo \n");
+	while(1){
+		if(!queue_is_empty(p->colas->cola_suspended)){
+			printf("Ingresó un proceso a la cola de suspendidos \n");
+			t_pcb* pcb = queue_pop(p->colas->cola_suspended);
+			t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
+			hilo->logger = p->logger;
+			hilo->configuraciones = p->configuraciones;
+			hilo->colas = p->colas;
+			hilo->pcb = pcb;
+			pthread_t hilo_a_memoria;
+			pthread_create (&hilo_a_memoria, NULL , (void*) mandar_y_recibir_confirmacion,(void*) hilo);
+			pthread_detach(hilo_a_memoria);  
+		}
+	}
+}
+
+int mandar_y_recibir_confirmacion(void* arg){
+	struct hilo_struct_standard_con_pcb *p;
+	p = (struct t_hilo_struct_standard_con_pcb*) arg;
+	t_pcb* pcb = p->pcb;
+	printf("El proceso %d es enviado a memoria \n",pcb->pid);
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = INICIAR_PROCESO;
+	int conexion = crear_conexion(p->logger , "Memoria" , p->configuraciones->ip_memoria ,p->configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
+	enviar_paquete(paquete,conexion);
+	eliminar_paquete(paquete);
+	int codigoOperacion = recibir_operacion(conexion);
+	int size;
+	char * buffer = recibir_buffer(&size, conexion);
+	printf("El proceso %d sale de la cola SUSPENDED-BLOCK\n",pcb->pid);
+	queue_push(p->colas->cola_ready,pcb);
+}
+
 
 
 t_colas_struct* crear_colas(){
@@ -87,9 +126,11 @@ t_colas_struct* crear_colas(){
 	t_queue* cola_new = queue_create();
 	t_queue* cola_ready = queue_create();
 	t_queue* cola_exec = queue_create();
+	t_queue* cola_suspended = queue_create();
 	colas->cola_new = cola_new;
 	colas->cola_ready = cola_ready;
 	colas->cola_exec = cola_exec;
+	colas->cola_suspended = cola_suspended;
 	return colas;
 }
 
@@ -104,6 +145,9 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
 	pthread_t hilo_planificador_corto_plazo;
     pthread_create (&hilo_planificador_corto_plazo, NULL , (void*) planificador_corto_plazo,(void*) planificador);
     pthread_detach(hilo_planificador_corto_plazo);
+	pthread_t hilo_planificador_mediano_plazo;
+    pthread_create (&hilo_planificador_mediano_plazo, NULL , (void*) planificador_mediano_plazo,(void*) planificador);
+    pthread_detach(hilo_planificador_mediano_plazo);
 }
 
 void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pcb* pcb){
@@ -156,20 +200,17 @@ void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logge
 	pcb->tiempo_bloqueo= tiempo_bloqueo;
 	pcb->rafaga_anterior=rafaga_anterior;
 	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
-	if(estado == BLOCKED){
+	if(estado == BLOCKED ){
 		printf("El proceso %d pasa a la cola BLOCK\n",pcb->pid);
-		t_paquete* paquete = crear_paquete();
-    	paquete->codigo_operacion = INICIAR_PROCESO;
-		int conexion = crear_conexion(logger , "Memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
-    	agregar_entero_a_paquete(paquete,pcb->pid);
-    	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
-		enviar_paquete(paquete,conexion);
-    	eliminar_paquete(paquete);
-		int codigoOperacion = recibir_operacion(conexion);
-		int size;
-    	char * buffer = recibir_buffer(&size, conexion);
-		printf("El proceso %d sale de la cola BLOCK\n",pcb->pid);
-		queue_push(colas->cola_ready,pcb);
+		if (pcb->tiempo_bloqueo >= configuraciones->tiempo_max_bloqueado){
+			printf("El proceso %d pasa a la cola SUSPENDED-BLOCK\n",pcb->pid);
+			queue_push(colas->cola_suspended,pcb);
+		}
+		else{
+			usleep(20);
+			printf("El proceso %d sale de la cola BLOCK\n",pcb->pid);
+			queue_push(colas->cola_ready,pcb);
+		}
 		}
 	else if (estado == TERMINATED){
 		log_info(logger, "El proceso %d terminó", pcb->pid);
@@ -188,9 +229,6 @@ int atender_cliente(void* arg){
 			break;
 		case INICIAR_PROCESO:
 			iniciar_proceso(p->logger,p->socket,p->configuraciones,p->colas->cola_new);
-			break;
-		case DEVOLVER_PROCESO:
-			recibir_pcb_de_cpu(p->logger,p->socket,p->configuraciones);
 			break;
 		case -1:
 			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");
@@ -226,9 +264,6 @@ int atender_cpu(void* arg){
 		case MENSAJE:
 			recibir_mensaje(p->socket , p->logger);
 			break;
-		case DEVOLVER_PROCESO:
-			recibir_pcb_de_cpu(p->logger,p->socket,p->configuraciones);
-			break;
 		case -1:
 			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");
 			return EXIT_FAILURE;
@@ -238,13 +273,6 @@ int atender_cpu(void* arg){
 		}
 	}
 	return EXIT_SUCCESS;
-}
-
-void recibir_pcb_de_cpu(t_log* logger,int client_socket, t_configuraciones* configuraciones,t_colas_struct* colas){
-	log_info(logger,"Devolvieron un proceso desde cpu\n");	
-	int size;
-   	char * buffer = recibir_buffer(&size, client_socket);
-	actualizar_pcb(buffer,configuraciones,logger,colas); //Dejar esto mas lindo
 }
 
 void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones,t_queue* cola_new){
