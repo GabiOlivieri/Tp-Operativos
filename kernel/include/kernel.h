@@ -52,14 +52,6 @@ typedef struct hilo_struct_standard_con_pcb {
     t_colas_struct* colas;
 } t_hilo_struct_standard_con_pcb;
 
-typedef struct hilo_struct_standard_con_pcb_socket {
-    int socket;
-    t_pcb* pcb;
-    t_log* logger;
-    t_configuraciones* configuraciones;
-    t_colas_struct* colas;
-} t_hilo_struct_standard_con_pcb_socket;
-
 typedef struct planificador_struct {
     t_log* logger;
     t_configuraciones* configuraciones;

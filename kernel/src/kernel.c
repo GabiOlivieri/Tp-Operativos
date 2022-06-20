@@ -31,6 +31,7 @@ void planificador_largo_plazo(void* arg){
 			t_pcb* pcb = queue_pop(p->colas->cola_new);
 			//iniciar_estructuras(p->logger,p->configuraciones,pcb);
 			queue_push(p->colas->cola_ready,pcb);
+			interrupcion_enviada = 0;
 			printf("Se agrego un proceso a la cola READY y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
 		}
 	}
@@ -43,7 +44,6 @@ void planificador_corto_plazo(void* arg){
 	while(1){
 		sleep(3);
 		if(!queue_is_empty(p->colas->cola_ready) && queue_is_empty(p->colas->cola_exec)){
-			interrupcion_enviada = 0;
 			if( strcmp(p->configuraciones->algoritmo_planificacion,"FIFO") == 0 ){
 				int size = queue_size(p->colas->cola_ready);
 				printf("La cola READY tiene %d procesos para ejecutar\n",size);
@@ -89,7 +89,6 @@ void planificador_corto_plazo(void* arg){
 			}
 		if (!queue_is_empty(p->colas->cola_ready) && !queue_is_empty(p->colas->cola_exec) && strcmp(p->configuraciones->algoritmo_planificacion,"SRT") == 0 && !interrupcion_enviada){
 			log_info(p->logger, "Envio interrupción al cpu");
-//			conexion_interrupt = crear_conexion(p->logger , "CPU Interrup" , p->configuraciones->ip_cpu , p->configuraciones->puerto_cpu_interrupt);
 			printf("Envio interrupción a cpu\n");
 			interrupcion_enviada = 1;
 			t_paquete* paquete = crear_paquete();
