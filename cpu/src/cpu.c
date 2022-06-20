@@ -1,5 +1,7 @@
 #include<cpu.h>
 
+int interrupcion=0;
+
 
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
@@ -15,7 +17,17 @@ int main(int argc, char* argv[]) {
 }
 
 void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket){
-   	while(1){
+	int servidor = iniciar_servidor(logger , "CPU Interrupt" , "127.0.0.1" , configuraciones->puerto_escucha_interrupt);
+   	int client_socket_interrupt = esperar_cliente(logger , "CPU Interrupt" , servidor);
+	t_hilo_struct* hilox = malloc(sizeof(t_hilo_struct));
+	hilox->logger = logger;
+	hilox->socket = client_socket_interrupt;
+	hilox->configuraciones = configuraciones;
+	pthread_t hilo_servidor_atender_interrupcion;
+    pthread_create (&hilo_servidor_atender_interrupcion, NULL , (void*) atender_interrupcion,(void*) hilox);
+    pthread_detach(hilo_servidor_atender_interrupcion);    
+	while(1){
+		
         int client_socket = esperar_cliente(logger , "CPU Dispatch" , socket);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
 		hilo->logger = logger;
@@ -23,11 +35,46 @@ void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int soc
 		hilo->configuraciones = configuraciones;
         pthread_t hilo_servidor;
         pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
-        pthread_detach(hilo_servidor);  
+        pthread_detach(hilo_servidor);
+
     }	
 }
 
+int atender_interrupcion(void* arg){
+	printf("Atendedor de interrupciones\n");
+	struct hilo_struct *p;
+	p = (struct hilo_struct*) arg;
+	while (1){
+		printf("Espero interrupcion");
+		int cod_op = recibir_operacion(p->socket);
+		switch (cod_op) {
+    		case MENSAJE:
+    			recibir_mensaje(p->socket , p->logger);
+    			break;
+    		case PAQUETE:
+    			log_info(p->logger, "Me llegaron los siguientes valores:\n");
+    			break;
+
+    		case INICIAR_PROCESO:
+    			log_info(p->logger, "Me llego una interrupcion");
+    			int size;
+       			printf("Me llego una interrupcion\n");
+				interrupcion=1;
+    			break;
+			
+    		case -1:
+    			log_error(p->logger, "el cliente se desconecto. Terminando servidor");
+    			return EXIT_FAILURE;
+    		default:
+    			log_warning(p->logger,"Operacion desconocida. No quieras meter la pata");
+    			break;
+    		}
+	}
+	return EXIT_SUCCESS;	
+}
+
 int atender_cliente(void* arg){
+	printf("Atendedor de clientes\n");
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;
 	while (1){
@@ -47,9 +94,11 @@ int atender_cliente(void* arg){
 				time_t begin = time(NULL);
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
-       			while (!hay_interrupcion() && instruccion != EXIT && instruccion != IO){
+       			while (!interrupcion && instruccion != EXIT && instruccion != IO){
+					   printf("%d",interrupcion);
     			instruccion = ejecutar_instruccion(pcb,p->configuraciones);
 				}
+				interrupcion=0;
 				time_t end = time(NULL);
 				printf("Tardó %d segundos \n", (end - begin) );
 				pcb->rafaga_anterior= (end - begin);
@@ -112,7 +161,7 @@ void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 
 int hay_interrupcion(){
 	// Aća va toda la logica cuando llega una interrupción para que devuelva un true
-	return 0;
+	return interrupcion;
 }
 
 t_pcb* recibir_pcb(char* buffer){

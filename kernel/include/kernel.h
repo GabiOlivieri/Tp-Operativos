@@ -52,6 +52,14 @@ typedef struct hilo_struct_standard_con_pcb {
     t_colas_struct* colas;
 } t_hilo_struct_standard_con_pcb;
 
+typedef struct hilo_struct_standard_con_pcb_socket {
+    int socket;
+    t_pcb* pcb;
+    t_log* logger;
+    t_configuraciones* configuraciones;
+    t_colas_struct* colas;
+} t_hilo_struct_standard_con_pcb_socket;
+
 typedef struct planificador_struct {
     t_log* logger;
     t_configuraciones* configuraciones;
@@ -146,5 +154,7 @@ void configuraciones_free(t_configuraciones* configuraciones);
 * @DESC: Es la función de un hilo que extrae el pcb de el struct del hilo y lo manda a memoria esperando a que memoria lo devuelva.
 */
 int mandar_y_recibir_confirmacion(void* arg);
+
+void hilo_enviar_pcb_cpu(void* arg);
 
 #endif

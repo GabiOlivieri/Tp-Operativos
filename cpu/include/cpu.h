@@ -71,6 +71,8 @@ void devolver_pcb(t_pcb* pcb,t_log* logger,int socket);
 
 int atender_cliente(void* arg);
 
+int atender_interrupcion(void* arg);
+
 void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket);
 
 #endif
