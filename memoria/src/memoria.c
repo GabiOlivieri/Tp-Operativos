@@ -74,7 +74,7 @@ t_pcb* recibir_pcb(char* buffer){
 	pcb->pid = leer_entero(buffer,0);
 	pcb->tiempo_bloqueo = leer_entero(buffer,1);
 	printf("El Process Id del pcb recibido es: %d y se va a quedar: %d \n",pcb->pid,pcb->tiempo_bloqueo);
-    sleep(pcb->tiempo_bloqueo);
+    usleep(pcb->tiempo_bloqueo);
 	return pcb;
 }
 

@@ -77,6 +77,15 @@ void planificador_corto_plazo(void* arg){
 			printf("Se agrego un proceso a la cola EXEC\n");
 			enviar_pcb(p->logger,p->configuraciones,pcb,p->colas);
 		}
+		else if (!queue_is_empty(p->colas->cola_ready) && !queue_is_empty(p->colas->cola_exec) && strcmp(p->configuraciones->algoritmo_planificacion,"FIFO") != 0){
+			printf("Envio interrupción a cpu\n");
+			int conexion = crear_conexion(p->logger , "CPU Interrupt" , p->configuraciones->ip_cpu ,p->configuraciones->puerto_cpu_interrupt);
+			t_paquete* paquete = crear_paquete();
+			paquete->codigo_operacion = INICIAR_PROCESO;
+			enviar_paquete(paquete,conexion);
+			eliminar_paquete(paquete);
+			close(conexion);
+		}
 	}
 }
 
@@ -116,6 +125,7 @@ int mandar_y_recibir_confirmacion(void* arg){
 	int size;
 	char * buffer = recibir_buffer(&size, conexion);
 	printf("El proceso %d sale de la cola SUSPENDED-BLOCK\n",pcb->pid);
+	if (procesos_en_memoria<p->configuraciones->grado_multiprogramacion)
 	queue_push(p->colas->cola_ready,pcb);
 }
 
@@ -243,7 +253,7 @@ int atender_cliente(void* arg){
 
 void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_colas_struct* colas){
    	while(1){
-        int client_socket = esperar_cliente(logger,"escucha",socket);
+        int client_socket = esperar_cliente(logger,"CPU",socket);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
 		hilo->logger = logger;
 		hilo->socket = client_socket;
