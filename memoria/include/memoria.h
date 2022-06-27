@@ -150,8 +150,8 @@ t_pcb* bloquear_proceso(char* buffer,t_configuraciones* configuraciones);
 
 t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
 
-char *my_itoa(int num);
+char* my_itoa(int num);
 
-FILE* archivo_de_swap(char* path,char* pid);
+FILE* archivo_de_swap(char *pid);
 
 #endif

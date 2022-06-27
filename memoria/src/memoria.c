@@ -1,6 +1,8 @@
 #include<memoria.h>
 
 
+char* path_swap = NULL;
+
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./memoria.log","MEMORIA", false , LOG_LEVEL_TRACE);
     t_config* config = config_create("./memoria.conf");
@@ -33,7 +35,6 @@ void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int soc
 int atender_cliente(void* arg){
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;
-	const char* path = p->configuraciones->path_swap;
 	while (1){
 		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {
@@ -51,9 +52,8 @@ int atender_cliente(void* arg){
 				printf("Me llegó un INICIAR_PROCESO\n");
        			char * buffer = recibir_buffer(&size, p->socket);
 				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
-				char *pidchar = my_itoa(pcb->pid);
-				printf("%s\n", pidchar);
-				fp = archivo_de_swap(path,pidchar);
+				char *pidchar = {'0' + pcb->pid, '\0' };
+				fp = archivo_de_swap(pidchar);
 				fclose(fp);
 				t_paquete* paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
@@ -65,7 +65,7 @@ int atender_cliente(void* arg){
 
     		case ENVIAR_A_SWAP:
     			log_info(p->logger, "Me llego un ENVIAR_A_SWAP\n");
-				printf("Me llego un ENVIAR_A_SWAP");
+				printf("Me llego un ENVIAR_A_SWAP\n");
        			char * buffer_swap = recibir_buffer(&size, p->socket);
        			t_pcb* pcb_swap = bloquear_proceso(buffer_swap,p->configuraciones);
        			devolver_pcb(pcb_swap,p->logger,p->socket);
@@ -82,21 +82,17 @@ int atender_cliente(void* arg){
 	return EXIT_SUCCESS;	
 }
 
-char *my_itoa(int num)
-{
-        char* str;
-        sprintf(str, "%d", num);
-        return str;
-}
 
-FILE* archivo_de_swap(char* path,char* pid){
-		char *nombre_archivo = path;
+FILE* archivo_de_swap(char *pid){
+		const char* barra = "/";
 		const char* extension = ".swap";
-		strcat(nombre_archivo, "/");
-		strcat(nombre_archivo, pid);
-		strcat(nombre_archivo, extension);
-		printf("%s\n", nombre_archivo);
-		return fopen(nombre_archivo, "w+");
+		char * path = malloc(256); 
+		path = strcpy(path, path_swap);	
+		strcat(path, barra);
+		strcat(path, &pid);
+		strcat(path, extension);
+		printf("%s\n", path);
+		return fopen(path, "w+");
 }
 
 
@@ -189,7 +185,7 @@ void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->algoritmo_reemplazo = config_get_string_value(config , "ALGORITMO_REEMPLAZO");
 	configuraciones->marcos_por_proceso = config_get_int_value(config , "MARCOS_POR_PROCESO");
     configuraciones->retardo_swap = config_get_int_value(config , "RETARDO_SWAP");
-	configuraciones->path_swap = config_get_string_value(config , "PATH_SWAP");
+	path_swap = config_get_string_value(config , "PATH_SWAP");
 }
 
 void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* configuraciones , int servidor){
