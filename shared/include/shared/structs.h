@@ -9,6 +9,7 @@ typedef enum
 	PAQUETE,
 	INICIAR_PROCESO,
 	INICIAR_ESTRUCTURAS,
+    ENVIAR_A_SWAP,
     DEVOLVER_PROCESO
 } op_code;
 

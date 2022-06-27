@@ -48,6 +48,19 @@ typedef struct planificador_struct {
     t_colas_struct* colas;
 } t_planificador_struct;
 
+typedef struct tabla_paginacion_1erNivel {
+    int dir_fisica;
+    int nro_tabla;
+} t_tabla_paginacion_1erNivel;
+
+typedef struct tabla_paginacion_2doNivel {
+    int dir_fisica;
+    int marco;
+    bool p;
+    bool u;
+    bool m;
+} t_tabla_paginacion_2doNivel;
+
 /**
 * @NAME: crear_pcb
 * @DESC: lee los datos del paquete e interpreta las instrucciones para crear el pcb correspondiente
@@ -133,7 +146,12 @@ void configuraciones_free(t_configuraciones* configuraciones);
 
 t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones);
 
+t_pcb* bloquear_proceso(char* buffer,t_configuraciones* configuraciones);
+
 t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
 
+char *my_itoa(int num, char *str);
+
+FILE* archivo_de_swap(char* path,char* pid);
 
 #endif

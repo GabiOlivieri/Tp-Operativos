@@ -7,6 +7,7 @@ int interrupcion_enviada = 0;
 pthread_mutex_t interrupcion_enviada_mutex;
 pthread_mutex_t procesos_en_memoria_mutex;
 pthread_mutex_t pid_mutex;
+pthread_mutex_t conexion_a_memoria_mutex;
 
 // Esto es para hacer semaforos binarias cuando hay procesos en swap que pasan a ready 
 pthread_mutex_t swap_mutex;
@@ -149,7 +150,7 @@ int mandar_y_recibir_confirmacion(void* arg){
 	t_pcb* pcb = p->pcb;
 	printf("El proceso %d es enviado a memoria \n",pcb->pid);
 	t_paquete* paquete = crear_paquete();
-	paquete->codigo_operacion = INICIAR_PROCESO;
+	paquete->codigo_operacion = ENVIAR_A_SWAP;
 	int conexion = crear_conexion(p->logger , "Memoria" , p->configuraciones->ip_memoria ,p->configuraciones->puerto_memoria);
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
@@ -204,7 +205,9 @@ void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pc
 	int conexion = crear_conexion(logger , "Conexion con memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
 	enviar_paquete(paquete,conexion);
 	eliminar_paquete(paquete);
+	pthread_mutex_lock (&conexion_a_memoria_mutex);
 	int codigoOperacion = recibir_operacion(conexion);
+	pthread_mutex_unlock (&conexion_a_memoria_mutex);
 	int size;
     char * buffer = recibir_buffer(&size, conexion);
 	close(conexion);
@@ -334,6 +337,34 @@ void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configu
 	t_pcb* pcb  = crear_pcb(buffer,configuraciones,logger);
 	log_info(logger,"Se creo el PCB con Process Id: %d y Tamaño: %d\n",pcb->pid,pcb->size);
 	printf("Se agrego un proceso a la cola NEW\n");
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = INICIAR_PROCESO;
+	int conexion = crear_conexion(logger , "Memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	int cantidad_enteros = list_size(pcb->lista_instrucciones);
+	agregar_entero_a_paquete(paquete,cantidad_enteros);
+	agregar_entero_a_paquete(paquete,pcb->size);
+	agregar_entero_a_paquete(paquete,pcb->pc);
+	agregar_entero_a_paquete(paquete,pcb->estimacion_inicial);
+	agregar_entero_a_paquete(paquete,pcb->alfa);
+	agregar_entero_a_paquete(paquete,pcb->estado);
+	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
+	agregar_entero_a_paquete(paquete,pcb->rafaga_anterior);
+	t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
+    while(list_iterator_has_next(iterator)){
+        int ins = list_iterator_next(iterator);
+        agregar_entero_a_paquete(paquete,ins);
+    }
+    list_iterator_destroy(iterator);
+	enviar_paquete(paquete,conexion);
+	eliminar_paquete(paquete);
+	pthread_mutex_lock (&conexion_a_memoria_mutex);
+	int codigoOperacion = recibir_operacion(conexion);
+	pthread_mutex_unlock (&conexion_a_memoria_mutex);
+	buffer = recibir_buffer(&size, conexion);
+	int direccion_logica = leer_entero(buffer,1);
+	printf("Termine de recibirlo\n");
+	printf("El proceso %d tiene la dirección: %d\n",pcb->pid,direccion_logica);
 	queue_push(cola_new,pcb);
 }
 

@@ -6,6 +6,9 @@ int main(int argc, char* argv[]) {
     t_config* config = config_create("./memoria.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
+
+	void* espacioEnMemoria[configuraciones->tam_memoria];
+
     leer_config(config,configuraciones);
 
     int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
@@ -30,6 +33,7 @@ void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int soc
 int atender_cliente(void* arg){
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;
+	const char* path = p->configuraciones->path_swap;
 	while (1){
 		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {
@@ -40,12 +44,31 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llegaron los siguientes valores:\n");
     			break;
 
-    		case INICIAR_PROCESO:
-    			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
-                int size;
+			case INICIAR_PROCESO:
+				log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
+				int size;
+				char *pidchar;
+				FILE *fp;
+				printf("Me llegó un INICIAR_PROCESO\n");
        			char * buffer = recibir_buffer(&size, p->socket);
-       			t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
-       			devolver_pcb(pcb,p->logger,p->socket);
+				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
+				pidchar = my_itoa(pcb->pid,pidchar);
+				fp = archivo_de_swap(path,pidchar);
+				fclose(fp);
+				t_paquete* paquete = crear_paquete();
+				paquete->codigo_operacion = DEVOLVER_PROCESO;
+				agregar_entero_a_paquete(paquete,pcb->pid);
+				agregar_entero_a_paquete(paquete,pcb->size);
+				enviar_paquete(paquete,p->socket);
+				eliminar_paquete(paquete);
+				break;
+
+    		case ENVIAR_A_SWAP:
+    			log_info(p->logger, "Me llego un ENVIAR_A_SWAP\n");
+				printf("Me llego un ENVIAR_A_SWAP");
+       			char * buffer_swap = recibir_buffer(&size, p->socket);
+       			t_pcb* pcb_swap = bloquear_proceso(buffer_swap,p->configuraciones);
+       			devolver_pcb(pcb_swap,p->logger,p->socket);
     			break;
 			
     		case -1:
@@ -59,6 +82,25 @@ int atender_cliente(void* arg){
 	return EXIT_SUCCESS;	
 }
 
+char *my_itoa(int num, char *str)
+{
+        if(str == NULL)
+        {
+                return NULL;
+        }
+        sprintf(str, "%d", num);
+        return str;
+}
+
+FILE* archivo_de_swap(char* path,char* pid){
+		char *nombre_archivo = path;
+		strcat(nombre_archivo, "/");
+		strcat(nombre_archivo, pid);
+		strcat(nombre_archivo, ".swap");
+		printf("%s\n", nombre_archivo);
+		return fopen(nombre_archivo, "w+");
+}
+
 
 void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 	t_paquete* paquete = crear_paquete();
@@ -70,6 +112,67 @@ void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 }
 
 t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
+	t_pcb* pcb = malloc(sizeof(t_pcb));
+	t_list* lista = list_create();
+
+	pcb->pid = leer_entero(buffer,0);
+	int cantidad_enteros = leer_entero(buffer,1);
+	int tamanio_proceso = leer_entero(buffer,2);
+	pcb->size = tamanio_proceso;
+	pcb->pc = leer_entero(buffer,3);
+	pcb->estimacion_inicial = leer_entero(buffer,4);
+	pcb->alfa = leer_entero(buffer,5);
+	pcb->estado = leer_entero(buffer,6);
+	pcb->tiempo_bloqueo= leer_entero(buffer,7);
+	pcb->rafaga_anterior = leer_entero(buffer,8);
+	cantidad_enteros = cantidad_enteros + 8;
+	printf("la cantidad de instrucciones es: %d\n",cantidad_enteros);
+	for(int i = 9; i <= cantidad_enteros;i++){
+		int x = leer_entero(buffer,i);
+		if(x==NO_OP){
+			printf("NO_OP\n");
+			list_add(lista,x);
+		}else if(x==IO){
+			printf("IO\n");
+			list_add(lista,x);
+			i++;
+			int y = leer_entero(buffer,i);
+			list_add(lista,y);
+		}else if(x==READ){
+			printf("READ\n");
+			list_add(lista,x);
+			i++;
+			int y = leer_entero(buffer,i);
+			list_add(lista,y);
+		}else if(x==WRITE){
+			printf("WRITE\n");
+			list_add(lista,x);
+			i++;
+			int y = leer_entero(buffer,i);
+			list_add(lista,y);
+			i++;
+			int z = leer_entero(buffer,i);
+			list_add(lista,z);
+		}else if(x==COPY){
+			printf("COPY\n");
+			list_add(lista,x);
+			i++;
+			int y = leer_entero(buffer,i);
+			list_add(lista,y);
+			i++;
+			int z = leer_entero(buffer,i);
+			list_add(lista,z);
+		}else if(x==EXIT){
+			printf("EXIT\n");
+			list_add(lista,x);
+		}
+	}
+	pcb->lista_instrucciones = lista;
+	printf("El Process Id del pcb recibido es: %d y tamaño %d\n",pcb->pid,pcb->size);
+	return pcb;
+}
+
+t_pcb* bloquear_proceso(char* buffer,t_configuraciones* configuraciones){
 	t_pcb* pcb = malloc(sizeof(t_pcb));
 	pcb->pid = leer_entero(buffer,0);
 	pcb->tiempo_bloqueo = leer_entero(buffer,1);
