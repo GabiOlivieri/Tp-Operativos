@@ -47,12 +47,12 @@ int atender_cliente(void* arg){
 			case INICIAR_PROCESO:
 				log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
 				int size;
-				char *pidchar;
 				FILE *fp;
 				printf("Me llegó un INICIAR_PROCESO\n");
        			char * buffer = recibir_buffer(&size, p->socket);
 				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
-				pidchar = my_itoa(pcb->pid,pidchar);
+				char *pidchar = my_itoa(pcb->pid);
+				printf("%s\n", pidchar);
 				fp = archivo_de_swap(path,pidchar);
 				fclose(fp);
 				t_paquete* paquete = crear_paquete();
@@ -82,21 +82,19 @@ int atender_cliente(void* arg){
 	return EXIT_SUCCESS;	
 }
 
-char *my_itoa(int num, char *str)
+char *my_itoa(int num)
 {
-        if(str == NULL)
-        {
-                return NULL;
-        }
+        char* str;
         sprintf(str, "%d", num);
         return str;
 }
 
 FILE* archivo_de_swap(char* path,char* pid){
 		char *nombre_archivo = path;
+		const char* extension = ".swap";
 		strcat(nombre_archivo, "/");
 		strcat(nombre_archivo, pid);
-		strcat(nombre_archivo, ".swap");
+		strcat(nombre_archivo, extension);
 		printf("%s\n", nombre_archivo);
 		return fopen(nombre_archivo, "w+");
 }
@@ -177,7 +175,7 @@ t_pcb* bloquear_proceso(char* buffer,t_configuraciones* configuraciones){
 	pcb->pid = leer_entero(buffer,0);
 	pcb->tiempo_bloqueo = leer_entero(buffer,1);
 	printf("El Process Id del pcb recibido es: %d y se va a quedar: %d \n",pcb->pid,pcb->tiempo_bloqueo);
-    usleep(pcb->tiempo_bloqueo * configuraciones->retardo_swap);
+    usleep(pcb->tiempo_bloqueo + configuraciones->retardo_swap);
 	return pcb;
 }
 

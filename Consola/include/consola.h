@@ -12,7 +12,7 @@
 
 typedef struct nombre {
     char *ip_kernel;
-    u_int16_t puerto_kernel;
+    char *puerto_kernel;
 } t_nombre;
 
 
