@@ -44,7 +44,7 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
                 int size;
        			char * buffer = recibir_buffer(&size, p->socket);
-       			t_pcb* pcb = recibir_pcb(buffer);
+       			t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
        			devolver_pcb(pcb,p->logger,p->socket);
     			break;
 			
@@ -69,12 +69,12 @@ void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
     eliminar_paquete(paquete);
 }
 
-t_pcb* recibir_pcb(char* buffer){
+t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
 	t_pcb* pcb = malloc(sizeof(t_pcb));
 	pcb->pid = leer_entero(buffer,0);
 	pcb->tiempo_bloqueo = leer_entero(buffer,1);
 	printf("El Process Id del pcb recibido es: %d y se va a quedar: %d \n",pcb->pid,pcb->tiempo_bloqueo);
-    usleep(pcb->tiempo_bloqueo);
+    usleep(pcb->tiempo_bloqueo * configuraciones->retardo_swap);
 	return pcb;
 }
 

@@ -131,7 +131,7 @@ void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* config
 */
 void configuraciones_free(t_configuraciones* configuraciones);
 
-t_pcb* recibir_pcb(char* buffer);
+t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones);
 
 t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
 

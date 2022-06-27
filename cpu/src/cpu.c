@@ -2,6 +2,8 @@
 
 int interrupcion=0;
 
+pthread_mutex_t interrupcion_mutex;
+
 
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
@@ -55,7 +57,12 @@ int atender_interrupcion(void* arg){
     			log_error(p->logger, "el cliente se desconecto. Terminando servidor");
     			return EXIT_FAILURE;
     		default:
-    			actualizar_interrupcion(p->logger);
+				pthread_mutex_lock (&interrupcion_mutex);
+				if(interrupcion != 1){
+						pthread_mutex_unlock (&interrupcion_mutex);
+						actualizar_interrupcion(p->logger);
+					}
+				pthread_mutex_unlock (&interrupcion_mutex);
     			break;
     		}
 	}
@@ -65,7 +72,9 @@ int atender_interrupcion(void* arg){
 void actualizar_interrupcion(t_log* logger){
 	    log_info(logger, "Me llego una interrupcion");
        	printf("Me llego una interrupcion\n");
+		pthread_mutex_lock (&interrupcion_mutex);
 		interrupcion=1;
+		pthread_mutex_unlock (&interrupcion_mutex);
 }
 
 int atender_cliente(void* arg){
@@ -92,7 +101,9 @@ int atender_cliente(void* arg){
        			while (!interrupcion && instruccion != EXIT && instruccion != IO){
     			instruccion = ejecutar_instruccion(pcb,p->configuraciones);
 				}
+				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
+				pthread_mutex_unlock (&interrupcion_mutex);
 				time_t end = time(NULL);
 				printf("Tardó %d segundos \n", (end - begin) );
 				pcb->rafaga_anterior= (end - begin);

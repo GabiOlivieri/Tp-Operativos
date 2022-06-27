@@ -4,6 +4,14 @@ int pid = 0;
 int procesos_en_memoria = 0;
 int interrupcion_enviada = 0;
 
+pthread_mutex_t interrupcion_enviada_mutex;
+pthread_mutex_t procesos_en_memoria_mutex;
+pthread_mutex_t pid_mutex;
+
+// Esto es para hacer semaforos binarias cuando hay procesos en swap que pasan a ready 
+pthread_mutex_t swap_mutex;
+
+
 
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./kernel.log","KERNEL", false , LOG_LEVEL_DEBUG);
@@ -25,13 +33,15 @@ void planificador_largo_plazo(void* arg){
 	p = (struct planificador_struct*) arg;
 	while(1){
 		sleep(3);
-		if(!queue_is_empty(p->colas->cola_new)&&procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
+		if(!queue_is_empty(p->colas->cola_new) && procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
 			int size = queue_size(p->colas->cola_new);
 			printf("La cola NEW tiene %d procesos para planificar\n",size);
 			t_pcb* pcb = queue_pop(p->colas->cola_new);
 			//iniciar_estructuras(p->logger,p->configuraciones,pcb);
 			queue_push(p->colas->cola_ready,pcb);
+			pthread_mutex_lock (&interrupcion_enviada_mutex);
 			interrupcion_enviada = 0;
+			pthread_mutex_unlock (&interrupcion_enviada_mutex);
 			printf("Se agrego un proceso a la cola READY y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
 		}
 	}
@@ -87,15 +97,20 @@ void planificador_corto_plazo(void* arg){
 				}
 				
 			}
+		pthread_mutex_lock (&interrupcion_enviada_mutex);
 		if (!queue_is_empty(p->colas->cola_ready) && !queue_is_empty(p->colas->cola_exec) && strcmp(p->configuraciones->algoritmo_planificacion,"SRT") == 0 && !interrupcion_enviada){
+			pthread_mutex_unlock (&interrupcion_enviada_mutex);
 			log_info(p->logger, "Envio interrupción al cpu");
 			printf("Envio interrupción a cpu\n");
+			pthread_mutex_lock (&interrupcion_enviada_mutex);
 			interrupcion_enviada = 1;
+			pthread_mutex_unlock (&interrupcion_enviada_mutex);
 			t_paquete* paquete = crear_paquete();
 			paquete->codigo_operacion = INICIAR_PROCESO;
 			enviar_paquete(paquete,conexion_interrupt);
 			eliminar_paquete(paquete);
 		}
+		pthread_mutex_unlock (&interrupcion_enviada_mutex);
 	}
 }
 
@@ -146,6 +161,9 @@ int mandar_y_recibir_confirmacion(void* arg){
 	printf("El proceso %d sale de la cola SUSPENDED-BLOCK\n",pcb->pid);
 	if (procesos_en_memoria<p->configuraciones->grado_multiprogramacion)
 	queue_push(p->colas->cola_ready,pcb);
+	pthread_mutex_lock (&interrupcion_enviada_mutex);
+	interrupcion_enviada = 0;
+	pthread_mutex_unlock (&interrupcion_enviada_mutex);
 }
 
 
@@ -361,7 +379,9 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){
 	}
 	log_info(logger,"Decodificacion finalizada\n");
 	t_pcb* pcb = malloc(sizeof(t_pcb));
-	pcb->pid = pid++; 
+	pthread_mutex_lock (&pid_mutex);
+	pcb->pid = pid++;
+	pthread_mutex_unlock (&pid_mutex); 
 	pcb->size = tamanio_proceso;
 	pcb->pc = 0;
 	pcb->lista_instrucciones = lista;

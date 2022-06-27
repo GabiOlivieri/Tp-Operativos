@@ -45,6 +45,15 @@ typedef struct hilo_struct {
     t_colas_struct* colas;
 } t_hilo_struct;
 
+typedef struct binary_semaphore {
+    pthread_mutex_t mutex;
+    pthread_cond_t cvar;
+    bool v;
+} t_binary_semaphore;
+
+void mysem_post(struct binary_semaphore *p);
+void mysem_wait(struct binary_semaphore *p);
+
 typedef struct hilo_struct_standard_con_pcb {
     t_pcb* pcb;
     t_log* logger;
