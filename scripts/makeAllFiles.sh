@@ -1,6 +1,5 @@
 #!/bin/bash
 
-echo falopa
 cd /home/utnso/tp-2022-1c-Champagne-SO/shared
 make install
 make
