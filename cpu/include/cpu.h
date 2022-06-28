@@ -75,7 +75,7 @@ t_pcb* recibir_pcb(char* buffer);
 * @NAME: ejecutar_instruccion
 * @DESC: ejecuta la instrucción que está siendo apuntada por el PC
 */
-int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones);
+int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones);
 
 /**
 * @NAME: hay_interrupcion
@@ -93,6 +93,6 @@ int atender_cliente(void* arg);
 */
 int atender_interrupcion(void* arg);
 
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket);
+void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket);
 
 #endif

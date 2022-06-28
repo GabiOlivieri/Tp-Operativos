@@ -3,15 +3,17 @@
 
 char* path_swap = NULL;
 
+
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./memoria.log","MEMORIA", false , LOG_LEVEL_TRACE);
     t_config* config = config_create("./memoria.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
-
-	void* espacioEnMemoria[configuraciones->tam_memoria];
-
     leer_config(config,configuraciones);
+
+	void* espacio_Contiguo_En_Memoria[configuraciones->tam_memoria];
+	t_fila_tabla_paginacion_2doNivel filas_tabla_tabla_nivel[configuraciones->tam_pagina];
+	t_fila_tabla_paginacion_1erNivel filas_tabla_segundo_nivel[configuraciones->tam_pagina];
 
     int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
     manejar_conexion(logger,configuraciones,servidor);
@@ -35,6 +37,9 @@ void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int soc
 int atender_cliente(void* arg){
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;
+	int size;
+	char * buffer;
+	t_paquete* paquete;
 	while (1){
 		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {
@@ -45,17 +50,28 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llegaron los siguientes valores:\n");
     			break;
 
+			case PRIMER_ACCESO_A_MEMORIA:
+				printf("Recibí un READ\n");
+				buffer = recibir_buffer(&size, p->socket);
+				int pid = leer_entero(buffer,0);
+				paquete = crear_paquete();
+    			paquete->codigo_operacion = DEVOLVER_PROCESO;
+				printf("El proceso se desbloquea y vuelve a kernel\n");
+				agregar_entero_a_paquete(paquete,pid);
+				enviar_paquete(paquete, p->socket);
+				eliminar_paquete(paquete);
+				break;
+
 			case INICIAR_PROCESO:
 				log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
-				int size;
 				FILE *fp;
 				printf("Me llegó un INICIAR_PROCESO\n");
-       			char * buffer = recibir_buffer(&size, p->socket);
+       			buffer = recibir_buffer(&size, p->socket);
 				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
 				char *pidchar = {'0' + pcb->pid, '\0' };
 				fp = archivo_de_swap(pidchar);
 				fclose(fp);
-				t_paquete* paquete = crear_paquete();
+				paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				agregar_entero_a_paquete(paquete,pcb->size);

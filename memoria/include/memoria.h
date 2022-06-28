@@ -48,18 +48,16 @@ typedef struct planificador_struct {
     t_colas_struct* colas;
 } t_planificador_struct;
 
-typedef struct tabla_paginacion_1erNivel {
-    int dir_fisica;
+typedef struct fila_tabla_paginacion_1erNivel {
     int nro_tabla;
-} t_tabla_paginacion_1erNivel;
+} t_fila_tabla_paginacion_1erNivel;
 
-typedef struct tabla_paginacion_2doNivel {
-    int dir_fisica;
+typedef struct fila_tabla_paginacion_2doNivel {
     int marco;
     bool p;
     bool u;
     bool m;
-} t_tabla_paginacion_2doNivel;
+} t_fila_tabla_paginacion_2doNivel;
 
 /**
 * @NAME: crear_pcb
