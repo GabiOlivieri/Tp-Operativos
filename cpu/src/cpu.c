@@ -1,6 +1,8 @@
 #include<cpu.h>
 
 int interrupcion=0;
+int cantidad_de_entradas_por_tabla_de_paginas=0;
+int tamano_de_pagina=0;
 
 pthread_mutex_t interrupcion_mutex;
 pthread_mutex_t peticion_memoria_mutex;
@@ -12,12 +14,27 @@ int main(int argc, char* argv[]) {
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
     leer_config(config,configuraciones);
+	handshake_memoria(logger,configuraciones);
 
     int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
     manejar_interrupciones(logger,configuraciones);
 	manejar_conexion_kernel(logger,configuraciones,servidor);
     liberar_memoria(logger,config,configuraciones,servidor);
     return 0;
+}
+
+void handshake_memoria(t_log* logger,t_configuraciones* configuraciones){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = HANDSHAKE;
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	int codigoOperacion = recibir_operacion(socket);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	cantidad_de_entradas_por_tabla_de_paginas = leer_entero(buffer,0);
+	tamano_de_pagina = leer_entero(buffer,1);
+	close(socket);
 }
 
 void manejar_interrupciones(t_log* logger, t_configuraciones* configuraciones){

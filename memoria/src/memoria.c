@@ -126,6 +126,16 @@ int atender_cliente(void* arg){
 				eliminar_paquete(paquete);
 				break;
 
+			case HANDSHAKE:
+				printf("Recibí un HANDSHAKE\n");
+    			paquete = crear_paquete();
+    			paquete->codigo_operacion = HANDSHAKE;
+				agregar_entero_a_paquete(paquete,p->configuraciones->entradas_por_tabla);
+				agregar_entero_a_paquete(paquete,p->configuraciones->tam_pagina);
+				enviar_paquete(paquete, p->socket);
+				eliminar_paquete(paquete);
+    			break;
+
 			case INICIAR_PROCESO:
 				log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
 				FILE *fp;
