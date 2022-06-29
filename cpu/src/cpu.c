@@ -137,21 +137,9 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			pcb->estado = BLOCKED;
 		}
 		else if (x==READ){
-			t_paquete* paquete = crear_paquete();
-			paquete->codigo_operacion = PRIMER_ACCESO_A_MEMORIA;
-			int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
-			agregar_entero_a_paquete(paquete,pcb->pid);
-			pcb->pc++;
-			agregar_entero_a_paquete(paquete,5);
-			enviar_paquete(paquete,socket);
-			eliminar_paquete(paquete);
-			pthread_mutex_lock (&peticion_memoria_mutex);
-			int codigoOperacion = recibir_operacion(socket);
-			pthread_mutex_unlock (&peticion_memoria_mutex);
-			int size;
-			char * buffer = recibir_buffer(&size, socket);
-			int pid = leer_entero(buffer,0);
-			printf("La conexión por READ fue exitosa y el pid %d leyó\n",pid);
+			int direccion_fisica_entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones);
+			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,direccion_fisica_entrada_segunda_tabla);
+			tercer_acesso_a_memoria(pcb,logger,configuraciones,marco);
 		}
 		else if (x==EXIT) {
 			printf("Eecuto un EXIT\n");
@@ -159,6 +147,63 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			return x;}
 		pcb->pc++;
 		return x;
+}
+
+int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = PRIMER_ACCESO_A_MEMORIA;
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	pcb->pc++;
+	int y = list_get(pcb->lista_instrucciones,pcb->pc);
+	agregar_entero_a_paquete(paquete,y);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	pthread_mutex_lock (&peticion_memoria_mutex);
+	int codigoOperacion = recibir_operacion(socket);
+	pthread_mutex_unlock (&peticion_memoria_mutex);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	int pid = leer_entero(buffer,0);
+	int direccion_fisica_entrada_segunda_tabla = leer_entero(buffer,1);
+	printf("La conexión por READ fue exitosa y el pid %d leyó y trajo la dirección a la entrada de la segunda tabla: %d\n",pid,direccion_fisica_entrada_segunda_tabla );
+	return direccion_fisica_entrada_segunda_tabla;
+}
+
+int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int direccion_fisica_entrada_segunda_tabla){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = SEGUNDO_ACCESSO_A_MEMORIA;
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	agregar_entero_a_paquete(paquete,direccion_fisica_entrada_segunda_tabla);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	pthread_mutex_lock (&peticion_memoria_mutex);
+	int codigoOperacion = recibir_operacion(socket);
+	pthread_mutex_unlock (&peticion_memoria_mutex);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	int pid = leer_entero(buffer,0);
+	int marco = leer_entero(buffer,1);
+	printf("La conexión por READ fue exitosa y el pid %d leyó y marco: %d\n",pid,marco);
+}
+
+void tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int marco){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = TERCER_ACCESSO_A_MEMORIA;
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	agregar_entero_a_paquete(paquete,marco);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	pthread_mutex_lock (&peticion_memoria_mutex);
+	int codigoOperacion = recibir_operacion(socket);
+	pthread_mutex_unlock (&peticion_memoria_mutex);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	int pid = leer_entero(buffer,0);
+	int direccion_fisica = leer_entero(buffer,1);
+	printf("La conexión por READ fue exitosa y el pid %d leyó y dirección fisica: %d\n",pid,direccion_fisica);
 }
 
 void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){

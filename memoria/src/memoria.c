@@ -75,6 +75,8 @@ int atender_cliente(void* arg){
 	int size;
 	char * buffer;
 	t_paquete* paquete;
+	int pid;
+	int direccion_logica;
 	while (1){
 		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {
@@ -86,12 +88,40 @@ int atender_cliente(void* arg){
     			break;
 
 			case PRIMER_ACCESO_A_MEMORIA:
-				printf("Recibí un READ\n");
+				printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
-				int pid = leer_entero(buffer,0);
+				pid = leer_entero(buffer,0);
+				direccion_logica = leer_entero(buffer,1);
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
+				agregar_entero_a_paquete(paquete,2);
+				enviar_paquete(paquete, p->socket);
+				eliminar_paquete(paquete);
+				break;
+
+			case SEGUNDO_ACCESSO_A_MEMORIA:
+				printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
+				buffer = recibir_buffer(&size, p->socket);
+				pid = leer_entero(buffer,0);
+				direccion_logica = leer_entero(buffer,1);
+				paquete = crear_paquete();
+    			paquete->codigo_operacion = DEVOLVER_PROCESO;
+				agregar_entero_a_paquete(paquete,pid);
+				agregar_entero_a_paquete(paquete,3);
+				enviar_paquete(paquete, p->socket);
+				eliminar_paquete(paquete);
+				break;
+			
+			case TERCER_ACCESSO_A_MEMORIA:
+				printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
+				buffer = recibir_buffer(&size, p->socket);
+				pid = leer_entero(buffer,0);
+				direccion_logica = leer_entero(buffer,1);
+				paquete = crear_paquete();
+    			paquete->codigo_operacion = DEVOLVER_PROCESO;
+				agregar_entero_a_paquete(paquete,pid);
+				agregar_entero_a_paquete(paquete,5);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
 				break;
