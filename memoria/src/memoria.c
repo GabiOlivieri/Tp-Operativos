@@ -2,6 +2,9 @@
 
 
 char* path_swap = NULL;
+char *socket_cpu = NULL;
+
+pthread_mutex_t socket_cpu_mutex;
 
 
 int main(int argc, char* argv[]) {
@@ -16,22 +19,54 @@ int main(int argc, char* argv[]) {
 	t_fila_tabla_paginacion_1erNivel filas_tabla_segundo_nivel[configuraciones->tam_pagina];
 
     int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
-    manejar_conexion(logger,configuraciones,servidor);
+    t_queue* cola_suspendidos = queue_create();
+	crear_modulo_swap(logger,configuraciones,cola_suspendidos);
+	manejar_conexion(logger,configuraciones,servidor,cola_suspendidos);
     liberar_memoria(logger,config,configuraciones,servidor);
     return 0;
 }
 
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket){
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_queue* cola_suspendidos){
    	while(1){
         int client_socket = esperar_cliente(logger , "Memoria" , socket);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
 		hilo->logger = logger;
 		hilo->socket = client_socket;
 		hilo->configuraciones = configuraciones;
+		hilo->cola = cola_suspendidos;
         pthread_t hilo_servidor;
         pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
         pthread_detach(hilo_servidor);  
     }	
+}
+
+void crear_modulo_swap(t_log* logger, t_configuraciones* configuraciones,t_queue* cola_suspendidos){
+	t_hilo_struct_swap* hilo = malloc(sizeof(t_hilo_struct_swap));
+	hilo->logger = logger;
+	hilo->configuraciones = configuraciones;
+	hilo->cola = cola_suspendidos;
+	pthread_t hilo_del_modulo_swap;
+    pthread_create (&hilo_del_modulo_swap, NULL , (void*) modulo_swap,(void*) hilo);
+    pthread_detach(hilo_del_modulo_swap);
+}
+
+void modulo_swap(void* arg){
+	struct hilo_struct_swap *p;
+	p = (struct hilo_struct_swap*) arg;
+	printf("Arrancó modulo SWAP \n");
+	while(1){
+			if(!queue_is_empty(p->cola)){
+			printf("Ingresó un proceso a la cola de suspendidos \n");
+			t_pcb* pcb = queue_pop(p->cola);
+			pcb = bloquear_proceso(pcb,p->configuraciones);
+       		t_paquete* paquete = crear_paquete();
+			paquete->codigo_operacion = DEVOLVER_PROCESO;
+			printf("El proceso se desbloquea y vuelve a kernel\n");
+			agregar_entero_a_paquete(paquete,pcb->pid);
+			enviar_paquete(paquete,socket_cpu);
+			eliminar_paquete(paquete);
+		}
+	}
 }
 
 int atender_cliente(void* arg){
@@ -56,7 +91,6 @@ int atender_cliente(void* arg){
 				int pid = leer_entero(buffer,0);
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
-				printf("El proceso se desbloquea y vuelve a kernel\n");
 				agregar_entero_a_paquete(paquete,pid);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
@@ -80,11 +114,16 @@ int atender_cliente(void* arg){
 				break;
 
     		case ENVIAR_A_SWAP:
+				pthread_mutex_lock (&socket_cpu_mutex);
+				socket_cpu = p->socket;
+				pthread_mutex_unlock (&socket_cpu_mutex);
     			log_info(p->logger, "Me llego un ENVIAR_A_SWAP\n");
 				printf("Me llego un ENVIAR_A_SWAP\n");
        			char * buffer_swap = recibir_buffer(&size, p->socket);
-       			t_pcb* pcb_swap = bloquear_proceso(buffer_swap,p->configuraciones);
-       			devolver_pcb(pcb_swap,p->logger,p->socket);
+				t_pcb* pcb_swap = malloc(sizeof(t_pcb));
+				pcb_swap->pid = leer_entero(buffer_swap,0);
+				pcb_swap->tiempo_bloqueo = leer_entero(buffer_swap,1);
+				queue_push(p->cola,pcb_swap);
     			break;
 			
     		case -1:
@@ -182,10 +221,7 @@ t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
 	return pcb;
 }
 
-t_pcb* bloquear_proceso(char* buffer,t_configuraciones* configuraciones){
-	t_pcb* pcb = malloc(sizeof(t_pcb));
-	pcb->pid = leer_entero(buffer,0);
-	pcb->tiempo_bloqueo = leer_entero(buffer,1);
+t_pcb* bloquear_proceso(t_pcb* pcb,t_configuraciones* configuraciones){
 	printf("El Process Id del pcb recibido es: %d y se va a quedar: %d \n",pcb->pid,pcb->tiempo_bloqueo);
     usleep(pcb->tiempo_bloqueo + configuraciones->retardo_swap);
 	return pcb;

@@ -139,7 +139,7 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 		else if (x==READ){
 			t_paquete* paquete = crear_paquete();
 			paquete->codigo_operacion = PRIMER_ACCESO_A_MEMORIA;
-			int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , "8002");
+			int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
 			agregar_entero_a_paquete(paquete,pcb->pid);
 			pcb->pc++;
 			agregar_entero_a_paquete(paquete,5);
@@ -159,9 +159,7 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			return x;}
 		pcb->pc++;
 		return x;
-
 }
-
 
 void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 	t_paquete* paquete = crear_paquete();

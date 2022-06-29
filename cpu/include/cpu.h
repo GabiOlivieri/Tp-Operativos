@@ -18,7 +18,7 @@
 
 typedef struct configuraciones {
     char *ip_memoria;
-    u_int16_t puerto_memoria;
+    char *puerto_memoria;
     u_int16_t entradas_TLB;
     char *reemplazo_TLB;
     char *algoritmo_planificacion;
