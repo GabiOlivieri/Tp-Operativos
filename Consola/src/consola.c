@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
 
 void leer_config(t_config* config, t_nombre* nombre){
     nombre->ip_kernel = config_get_string_value(config , "IP_KERNEL");
-    nombre->puerto_kernel = config_get_int_value(config , "PUERTO_KERNEL");
+    nombre->puerto_kernel = config_get_string_value(config , "PUERTO_KERNEL");
 }
 
 t_list* leer_file(char* path,t_log* logger){
@@ -100,7 +100,7 @@ void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre,char* ar
         agregar_entero_a_paquete(paquete,ins);
     }
     list_iterator_destroy(iterator);
-    int conexion = crear_conexion(logger , "SERVER PLATA Y MIEDO NUNCA TUVE" , nombre->ip_kernel ,"8000");
+    int conexion = crear_conexion(logger , "SERVER PLATA Y MIEDO NUNCA TUVE" , nombre->ip_kernel ,nombre->puerto_kernel);
     enviar_paquete(paquete,conexion);
     eliminar_paquete(paquete);
     close(conexion);   

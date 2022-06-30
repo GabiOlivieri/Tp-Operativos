@@ -9,7 +9,7 @@ gcc $(CFLAGS) -o "$@" $^ $(IDIRS:%=-I%) $(LIBDIRS:%=-L%) $(LIBS:%=-l%) -pthread
 endef
 
 define compile_objs
-gcc $(CFLAGS) -c -o "$@" $< $(IDIRS:%=-I%) -pthread
+gcc $(CFLAGS) -c -o "$@" $< $(IDIRS:%=-I%)
 endef
 
 ################################################################################

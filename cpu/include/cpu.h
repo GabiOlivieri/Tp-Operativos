@@ -18,7 +18,7 @@
 
 typedef struct configuraciones {
     char *ip_memoria;
-    u_int16_t puerto_memoria;
+    char *puerto_memoria;
     u_int16_t entradas_TLB;
     char *reemplazo_TLB;
     char *algoritmo_planificacion;
@@ -59,18 +59,40 @@ void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* config
 */
 void nombre_free(t_configuraciones* configuraciones);
 
+/**
+* @NAME: obtener_lista_instrucciones
+* @DESC: pasandole el buffer y el pcb, te devuelve una lista con todos los enteros de las intrucciones y sus parametros
+*/
 t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
 
+/**
+* @NAME: recibir_pcb
+* @DESC: recibe el pcb de un buffer
+*/
 t_pcb* recibir_pcb(char* buffer);
 
-int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones);
+/**
+* @NAME: ejecutar_instruccion
+* @DESC: ejecuta la instrucción que está siendo apuntada por el PC
+*/
+int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones);
 
+/**
+* @NAME: hay_interrupcion
+* @DESC: chequea si hay una interrupción enviada por el kernel
+*/
 int hay_interrupcion();
 
 void devolver_pcb(t_pcb* pcb,t_log* logger,int socket);
 
 int atender_cliente(void* arg);
 
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket);
+/**
+* @NAME: atender_interrupcion
+* @DESC: hilo encargado de iniciar el servidor para atender las interrupciones
+*/
+int atender_interrupcion(void* arg);
+
+void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket);
 
 #endif

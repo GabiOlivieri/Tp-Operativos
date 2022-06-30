@@ -1,5 +1,12 @@
 #include<cpu.h>
 
+int interrupcion=0;
+int cantidad_de_entradas_por_tabla_de_paginas=0;
+int tamano_de_pagina=0;
+
+pthread_mutex_t interrupcion_mutex;
+pthread_mutex_t peticion_memoria_mutex;
+
 
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
@@ -7,15 +14,43 @@ int main(int argc, char* argv[]) {
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
     leer_config(config,configuraciones);
+	handshake_memoria(logger,configuraciones);
 
     int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
-    manejar_conexion(logger,configuraciones,servidor);
+    manejar_interrupciones(logger,configuraciones);
+	manejar_conexion_kernel(logger,configuraciones,servidor);
     liberar_memoria(logger,config,configuraciones,servidor);
     return 0;
 }
 
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket){
-   	while(1){
+void handshake_memoria(t_log* logger,t_configuraciones* configuraciones){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = HANDSHAKE;
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	int codigoOperacion = recibir_operacion(socket);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	cantidad_de_entradas_por_tabla_de_paginas = leer_entero(buffer,0);
+	tamano_de_pagina = leer_entero(buffer,1);
+	close(socket);
+}
+
+void manejar_interrupciones(t_log* logger, t_configuraciones* configuraciones){
+	int servidor = iniciar_servidor(logger , "CPU Interrupt" , "127.0.0.1" , configuraciones->puerto_escucha_interrupt);
+   	int client_socket_interrupt = esperar_cliente(logger , "CPU Interrupt" , servidor);
+	t_hilo_struct* hilox = malloc(sizeof(t_hilo_struct));
+	hilox->logger = logger;
+	hilox->socket = client_socket_interrupt;
+	hilox->configuraciones = configuraciones;
+	pthread_t hilo_servidor_atender_interrupcion;
+    pthread_create (&hilo_servidor_atender_interrupcion, NULL , (void*) atender_interrupcion,(void*) hilox);
+    pthread_detach(hilo_servidor_atender_interrupcion); 
+}
+
+void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket){
+	while(1){
         int client_socket = esperar_cliente(logger , "CPU Dispatch" , socket);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
 		hilo->logger = logger;
@@ -23,11 +58,45 @@ void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int soc
 		hilo->configuraciones = configuraciones;
         pthread_t hilo_servidor;
         pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
-        pthread_detach(hilo_servidor);  
+        pthread_detach(hilo_servidor);
+
     }	
 }
 
+int atender_interrupcion(void* arg){
+	printf("Atendedor de interrupciones\n");
+	struct hilo_struct *p;
+	p = (struct hilo_struct*) arg;
+	while (1){
+		printf("Espero interrupcion\n");
+		int cod_op = recibir_operacion(p->socket);
+		switch (cod_op) {		
+    		case -1:
+    			log_error(p->logger, "el cliente se desconecto. Terminando servidor");
+    			return EXIT_FAILURE;
+    		default:
+				pthread_mutex_lock (&interrupcion_mutex);
+				if(interrupcion != 1){
+						pthread_mutex_unlock (&interrupcion_mutex);
+						actualizar_interrupcion(p->logger);
+					}
+				pthread_mutex_unlock (&interrupcion_mutex);
+    			break;
+    		}
+	}
+	return EXIT_SUCCESS;	
+}
+
+void actualizar_interrupcion(t_log* logger){
+	    log_info(logger, "Me llego una interrupcion");
+       	printf("Me llego una interrupcion\n");
+		pthread_mutex_lock (&interrupcion_mutex);
+		interrupcion=1;
+		pthread_mutex_unlock (&interrupcion_mutex);
+}
+
 int atender_cliente(void* arg){
+	printf("Atendedor de clientes\n");
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;
 	while (1){
@@ -47,9 +116,12 @@ int atender_cliente(void* arg){
 				time_t begin = time(NULL);
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
-       			while (!hay_interrupcion() && instruccion != EXIT && instruccion != IO){
-    			instruccion = ejecutar_instruccion(pcb,p->configuraciones);
+       			while (!interrupcion && instruccion != EXIT && instruccion != IO){
+    			instruccion = ejecutar_instruccion(p->logger,pcb,p->configuraciones);
 				}
+				pthread_mutex_lock (&interrupcion_mutex);
+				interrupcion=0;
+				pthread_mutex_unlock (&interrupcion_mutex);
 				time_t end = time(NULL);
 				printf("Tardó %d segundos \n", (end - begin) );
 				pcb->rafaga_anterior= (end - begin);
@@ -68,7 +140,7 @@ int atender_cliente(void* arg){
 	return EXIT_SUCCESS;	
 }
 
-int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones){
+int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
 		int x = list_get(pcb->lista_instrucciones,pcb->pc);
 		if (x==NO_OP) {
 			printf("Eecuto un NO_OP\n");
@@ -81,13 +153,74 @@ int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones){
 			pcb->tiempo_bloqueo= y;
 			pcb->estado = BLOCKED;
 		}
+		else if (x==READ){
+			int direccion_fisica_entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones);
+			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,direccion_fisica_entrada_segunda_tabla);
+			tercer_acesso_a_memoria(pcb,logger,configuraciones,marco);
+		}
 		else if (x==EXIT) {
 			printf("Eecuto un EXIT\n");
 			pcb->estado = TERMINATED;
 			return x;}
 		pcb->pc++;
 		return x;
+}
 
+int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = PRIMER_ACCESO_A_MEMORIA;
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	pcb->pc++;
+	int y = list_get(pcb->lista_instrucciones,pcb->pc);
+	agregar_entero_a_paquete(paquete,y);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	pthread_mutex_lock (&peticion_memoria_mutex);
+	int codigoOperacion = recibir_operacion(socket);
+	pthread_mutex_unlock (&peticion_memoria_mutex);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	int pid = leer_entero(buffer,0);
+	int direccion_fisica_entrada_segunda_tabla = leer_entero(buffer,1);
+	printf("La conexión por READ fue exitosa y el pid %d leyó y trajo la dirección a la entrada de la segunda tabla: %d\n",pid,direccion_fisica_entrada_segunda_tabla );
+	return direccion_fisica_entrada_segunda_tabla;
+}
+
+int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int direccion_fisica_entrada_segunda_tabla){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = SEGUNDO_ACCESSO_A_MEMORIA;
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	agregar_entero_a_paquete(paquete,direccion_fisica_entrada_segunda_tabla);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	pthread_mutex_lock (&peticion_memoria_mutex);
+	int codigoOperacion = recibir_operacion(socket);
+	pthread_mutex_unlock (&peticion_memoria_mutex);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	int pid = leer_entero(buffer,0);
+	int marco = leer_entero(buffer,1);
+	printf("La conexión por READ fue exitosa y el pid %d leyó y marco: %d\n",pid,marco);
+}
+
+void tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int marco){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = TERCER_ACCESSO_A_MEMORIA;
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	agregar_entero_a_paquete(paquete,marco);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	pthread_mutex_lock (&peticion_memoria_mutex);
+	int codigoOperacion = recibir_operacion(socket);
+	pthread_mutex_unlock (&peticion_memoria_mutex);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	int pid = leer_entero(buffer,0);
+	int direccion_fisica = leer_entero(buffer,1);
+	printf("La conexión por READ fue exitosa y el pid %d leyó y dirección fisica: %d\n",pid,direccion_fisica);
 }
 
 void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
@@ -112,7 +245,7 @@ void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 
 int hay_interrupcion(){
 	// Aća va toda la logica cuando llega una interrupción para que devuelva un true
-	return 0;
+	return interrupcion;
 }
 
 t_pcb* recibir_pcb(char* buffer){
@@ -148,43 +281,32 @@ t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb){
 					list_add(lista,y);
 				}else if(x==READ){
 					printf("Me llego un %d por lo que es un READ\n",x);
-					list_add(lista,id);
+					list_add(lista,2);
 					aux++;
 					int y = leer_entero(buffer,aux);
-					void* parametro = malloc(sizeof(int));
-					parametro = (void*)(&y);
-					printf("Me llego un parametro: %d \n",y);
-					list_add(lista,parametro);
+					printf("READ %d \n",y);
+					list_add(lista,y);
 				}else if(x==WRITE){
 					printf("Me llego un %d por lo que es un WRITE\n",x);
-					list_add(lista,id);
+					list_add(lista,3);
 					aux++;
 					int y = leer_entero(buffer,aux);
-					void* parametro = malloc(sizeof(int));
-					parametro = (void*)(&y);
 					printf("Me llego un parametro: %d \n",y);
-					list_add(lista,parametro);
+					list_add(lista,y);
 					aux++;
 					int z = leer_entero(buffer,aux);
-					void* parametro1 = malloc(sizeof(int));
-					parametro1 = (void*)(&z);
-					printf("Me llego un parametro: %d \n",z);
-					list_add(lista,parametro1);
+					printf("WRITE %d %d \n",y,z);
+					list_add(lista,z);
 				}else if(x==COPY){
 					printf("Me llego un %d por lo que es un COPY\n",x);
-					list_add(lista,id);
+					list_add(lista,4);
 					aux++;
 					int y = leer_entero(buffer,aux);
-					void* parametro = malloc(sizeof(int));
-					parametro = (void*)(&y);
-					printf("Me llego un parametro: %d \n",y);
-					list_add(lista,parametro);
+					list_add(lista,y);
 					aux++;
 					int z = leer_entero(buffer,aux);
-					void* parametro1 = malloc(sizeof(int));
-					parametro1 = (void*)(&z);
-					printf("Me llego un parametro: %d \n",z);
-					list_add(lista,parametro1);
+					printf("COPY %d %d \n",y,z);
+					list_add(lista,z);
 				}else if(x==EXIT){
 					printf("EXIT\n",x);
 					list_add(lista,5);

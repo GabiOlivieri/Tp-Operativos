@@ -39,14 +39,31 @@ typedef struct hilo_struct {
     int socket;
     t_log* logger;
     t_configuraciones* configuraciones;
-    t_colas_struct* colas;
+    t_queue* cola;
 } t_hilo_struct;
+
+typedef struct hilo_struct_swap {
+    t_log* logger;
+    t_configuraciones* configuraciones;
+    t_queue* cola;
+} t_hilo_struct_swap;
 
 typedef struct planificador_struct {
     t_log* logger;
     t_configuraciones* configuraciones;
     t_colas_struct* colas;
 } t_planificador_struct;
+
+typedef struct fila_tabla_paginacion_1erNivel {
+    int nro_tabla;
+} t_fila_tabla_paginacion_1erNivel;
+
+typedef struct fila_tabla_paginacion_2doNivel {
+    int marco;
+    bool p;
+    bool u;
+    bool m;
+} t_fila_tabla_paginacion_2doNivel;
 
 /**
 * @NAME: crear_pcb
@@ -64,7 +81,7 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb);
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket);
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos);
 
 /**
 * @NAME: atender_cliente
@@ -131,9 +148,18 @@ void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* config
 */
 void configuraciones_free(t_configuraciones* configuraciones);
 
-t_pcb* recibir_pcb(char* buffer);
+t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones);
+
+t_pcb* bloquear_proceso(t_pcb* pcb,t_configuraciones* configuraciones);
 
 t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
 
+char* my_itoa(int num);
+
+FILE* archivo_de_swap(char *pid);
+
+void modulo_swap(void* arg);
+
+void crear_modulo_swap(t_log* logger, t_configuraciones* configuraciones,t_queue* cola_suspendidos);
 
 #endif

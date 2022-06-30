@@ -20,11 +20,6 @@ int recibir_operacion(int socket_cliente);
 */
 void recibir_mensaje(int socket_cliente , t_log* logger);
 
-/**
-* @NAME: iterator
-* @DESC: falopa.
-*/
-// void iterator(char* value);
 
 /**
 * @NAME: recibir_buffer
