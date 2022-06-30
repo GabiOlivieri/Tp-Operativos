@@ -9,6 +9,11 @@ typedef enum
 	PAQUETE,
 	INICIAR_PROCESO,
 	INICIAR_ESTRUCTURAS,
+    ENVIAR_A_SWAP,
+    PRIMER_ACCESO_A_MEMORIA,
+    SEGUNDO_ACCESSO_A_MEMORIA,
+    TERCER_ACCESSO_A_MEMORIA,
+    HANDSHAKE,
     DEVOLVER_PROCESO
 } op_code;
 
@@ -53,6 +58,7 @@ typedef struct
     float estimacion_inicial;
     int rafaga_anterior;
     float alfa;
+    int tiempo_bloqueo;
     estado estado;
 }t_pcb;
 

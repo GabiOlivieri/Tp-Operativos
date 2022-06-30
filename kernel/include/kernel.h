@@ -35,6 +35,7 @@ typedef struct colas_struct {
     t_queue* cola_new;
     t_queue* cola_ready;
     t_queue* cola_exec;
+    t_queue* cola_suspended;
 } t_colas_struct;
 
 typedef struct hilo_struct {
@@ -43,6 +44,22 @@ typedef struct hilo_struct {
     t_configuraciones* configuraciones;
     t_colas_struct* colas;
 } t_hilo_struct;
+
+typedef struct binary_semaphore {
+    pthread_mutex_t mutex;
+    pthread_cond_t cvar;
+    bool v;
+} t_binary_semaphore;
+
+void mysem_post(struct binary_semaphore *p);
+void mysem_wait(struct binary_semaphore *p);
+
+typedef struct hilo_struct_standard_con_pcb {
+    t_pcb* pcb;
+    t_log* logger;
+    t_configuraciones* configuraciones;
+    t_colas_struct* colas;
+} t_hilo_struct_standard_con_pcb;
 
 typedef struct planificador_struct {
     t_log* logger;
@@ -133,5 +150,12 @@ void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* config
 */
 void configuraciones_free(t_configuraciones* configuraciones);
 
+/**
+* @NAME: mandar_y_recibir_confirmacion
+* @DESC: Es la función de un hilo que extrae el pcb de el struct del hilo y lo manda a memoria esperando a que memoria lo devuelva.
+*/
+int mandar_y_recibir_confirmacion(void* arg);
+
+void hilo_enviar_pcb_cpu(void* arg);
 
 #endif

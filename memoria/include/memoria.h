@@ -1,5 +1,5 @@
-#ifndef PROJECT_KERNEL_H_
-#define PROJECT_KERNEL_H_
+#ifndef PROJECT_MEMORIA_H_
+#define PROJECT_MEMORIA_H_
 
 #include <stdlib.h>
 #include <string.h>
@@ -18,17 +18,15 @@
 
 
 typedef struct configuraciones {
-    char *ip_memoria;
-    char * puerto_memoria;
-    char *ip_cpu;
-    char * puerto_cpu_dispatch;
-    char * puerto_cpu_interrupt;
     char *puerto_escucha;
-    char *algoritmo_planificacion;
-    u_int16_t estimacion_inicial;
-    double alfa;
-    u_int16_t grado_multiprogramacion;
-    u_int16_t tiempo_max_bloqueado;
+    u_int16_t tam_memoria;
+    u_int16_t tam_pagina;
+    u_int16_t entradas_por_tabla;
+    u_int16_t retardo_memoria;
+    char *algoritmo_reemplazo;
+    u_int16_t marcos_por_proceso;
+    u_int16_t retardo_swap;
+    char *path_swap;
 } t_configuraciones;
 
 typedef struct colas_struct {
@@ -41,14 +39,31 @@ typedef struct hilo_struct {
     int socket;
     t_log* logger;
     t_configuraciones* configuraciones;
-    t_colas_struct* colas;
+    t_queue* cola;
 } t_hilo_struct;
+
+typedef struct hilo_struct_swap {
+    t_log* logger;
+    t_configuraciones* configuraciones;
+    t_queue* cola;
+} t_hilo_struct_swap;
 
 typedef struct planificador_struct {
     t_log* logger;
     t_configuraciones* configuraciones;
     t_colas_struct* colas;
 } t_planificador_struct;
+
+typedef struct fila_tabla_paginacion_1erNivel {
+    int nro_tabla;
+} t_fila_tabla_paginacion_1erNivel;
+
+typedef struct fila_tabla_paginacion_2doNivel {
+    int marco;
+    bool p;
+    bool u;
+    bool m;
+} t_fila_tabla_paginacion_2doNivel;
 
 /**
 * @NAME: crear_pcb
@@ -60,13 +75,13 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger);
 * @NAME: enviar_pcb
 * @DESC: Envia el pcb recibido a cpu
 */
-void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb,t_colas_struct* colas);
+void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb);
 
 /**
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_colas_struct* colas);
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos);
 
 /**
 * @NAME: atender_cliente
@@ -81,7 +96,7 @@ int atender_cpu(void* arg);
 * @NAME: atender_cliente
 * @DESC: recibe la informacion del proceso y crea su pcb correspondiente
 */
-void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones, t_queue* cola_new);
+void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones);
 
 /**
 * @NAME: planificador_largo_plazo
@@ -105,7 +120,7 @@ t_colas_struct* crear_colas();
 * @NAME: crear_planificadores()
 * @DESC: instancia hilos para los planificadores pasando la informacion que necesita para planificar
 */
-void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_colas_struct* colas);
+void crear_planificadores(t_log* logger, t_configuraciones* configuraciones);
 
 /**
 * @NAME: iniciar_estructuras()
@@ -133,5 +148,18 @@ void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* config
 */
 void configuraciones_free(t_configuraciones* configuraciones);
 
+t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones);
+
+t_pcb* bloquear_proceso(t_pcb* pcb,t_configuraciones* configuraciones);
+
+t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
+
+char* my_itoa(int num);
+
+FILE* archivo_de_swap(char *pid);
+
+void modulo_swap(void* arg);
+
+void crear_modulo_swap(t_log* logger, t_configuraciones* configuraciones,t_queue* cola_suspendidos);
 
 #endif
