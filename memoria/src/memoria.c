@@ -15,18 +15,43 @@ int main(int argc, char* argv[]) {
     leer_config(config,configuraciones);
 
 	void* espacio_Contiguo_En_Memoria[configuraciones->tam_memoria];
-	t_fila_tabla_paginacion_2doNivel filas_tabla_tabla_nivel[configuraciones->tam_pagina];
-	t_fila_tabla_paginacion_1erNivel filas_tabla_segundo_nivel[configuraciones->tam_pagina];
+
+	t_list* tabla_paginas_primer_nivel = list_create();
+	t_queue* cola_suspendidos = queue_create();
+	iniciar_tablas(configuraciones,tabla_paginas_primer_nivel);
+
 
     int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
-    t_queue* cola_suspendidos = queue_create();
+    
 	crear_modulo_swap(logger,configuraciones,cola_suspendidos);
-	manejar_conexion(logger,configuraciones,servidor,cola_suspendidos);
+	manejar_conexion(logger,configuraciones,servidor,cola_suspendidos,tabla_paginas_primer_nivel);
     liberar_memoria(logger,config,configuraciones,servidor);
+	list_destroy(tabla_paginas_primer_nivel);
     return 0;
 }
 
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_queue* cola_suspendidos){
+void iniciar_tablas(t_configuraciones* configuraciones,t_list* tabla_paginas_primer_nivel){
+	int x = 1;
+
+	for(int i = 1; i <= configuraciones->entradas_por_tabla; i++){
+		t_fila_tabla_paginacion_1erNivel* filas_tabla_primer_nivel = malloc(sizeof(t_fila_tabla_paginacion_1erNivel));
+		filas_tabla_primer_nivel->nro_tabla = x;
+		t_list* tabla_paginas_segundo_nivel = list_create();
+		filas_tabla_primer_nivel->tabla_segundo_nivel = tabla_paginas_segundo_nivel;
+
+		for(int j = 1; j <= configuraciones->entradas_por_tabla; j++){
+			t_fila_tabla_paginacion_2doNivel* filas_tabla_segundo_nivel = malloc(sizeof(t_fila_tabla_paginacion_2doNivel));
+			filas_tabla_segundo_nivel->marco = x;
+			x++;
+			list_add(tabla_paginas_segundo_nivel,filas_tabla_segundo_nivel);
+		}
+
+		list_add(tabla_paginas_primer_nivel,filas_tabla_primer_nivel);
+	}
+}
+
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_queue* cola_suspendidos,
+						t_list* tabla_paginas_primer_nivel){
    	while(1){
         int client_socket = esperar_cliente(logger , "Memoria" , socket);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
@@ -34,6 +59,7 @@ void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int soc
 		hilo->socket = client_socket;
 		hilo->configuraciones = configuraciones;
 		hilo->cola = cola_suspendidos;
+		hilo->tabla_paginas_primer_nivel = tabla_paginas_primer_nivel;
         pthread_t hilo_servidor;
         pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
         pthread_detach(hilo_servidor);  
@@ -148,7 +174,8 @@ int atender_cliente(void* arg){
 				paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pcb->pid);
-				agregar_entero_a_paquete(paquete,pcb->size);
+				int entrada_tabla_primer_nivel = asignar_tabla_primer_nivel(p->tabla_paginas_primer_nivel,p->configuraciones);
+				agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
 				enviar_paquete(paquete,p->socket);
 				eliminar_paquete(paquete);
 				break;
@@ -188,6 +215,29 @@ FILE* archivo_de_swap(char *pid){
 		strcat(path, extension);
 		printf("%s\n", path);
 		return fopen(path, "w+");
+}
+
+int asignar_tabla_primer_nivel(t_list* tabla_paginas_primer_nivel,t_configuraciones* configuraciones){
+	int index = 0;
+		t_list_iterator* iterator = list_iterator_create(tabla_paginas_primer_nivel);
+    	while(list_iterator_has_next(iterator)){
+        	t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_iterator_next(iterator);
+        	printf("Analizando la entrada de segundo nivel: %d\n",fila_tabla_primer_nivel->nro_tabla);
+		
+			t_list_iterator* iterator_segundo = list_iterator_create(fila_tabla_primer_nivel->tabla_segundo_nivel);
+    		while(list_iterator_has_next(iterator)){
+        	t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_segundo);
+			printf("Analizando marco: %d\n",fila_tabla_segundo_nivel->marco);
+				if(fila_tabla_segundo_nivel->p == 0) {
+					fila_tabla_segundo_nivel->p = 1;
+					return index;
+					}
+			}
+			list_iterator_destroy(iterator_segundo);
+			index++;
+	}
+    list_iterator_destroy(iterator);
+	return -1;
 }
 
 

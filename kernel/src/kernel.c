@@ -362,9 +362,9 @@ void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configu
 	int codigoOperacion = recibir_operacion(conexion);
 	pthread_mutex_unlock (&conexion_a_memoria_mutex);
 	buffer = recibir_buffer(&size, conexion);
-	int direccion_logica = leer_entero(buffer,1);
+	int entrada_tabla_primer_nivel = leer_entero(buffer,1);
 	printf("Termine de recibirlo\n");
-	printf("El proceso %d tiene la dirección: %d\n",pcb->pid,direccion_logica);
+	printf("El proceso %d tiene la entrada de tabla de primer nivel: %d\n",pcb->pid,entrada_tabla_primer_nivel);
 	queue_push(cola_new,pcb);
 }
 

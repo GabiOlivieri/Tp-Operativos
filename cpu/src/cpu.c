@@ -154,9 +154,20 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			pcb->estado = BLOCKED;
 		}
 		else if (x==READ){
-			int direccion_fisica_entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones);
+			pcb->pc++;
+			int direccion_logica = list_get(pcb->lista_instrucciones,pcb->pc);
+			int direccion_fisica_entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion_logica);
 			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,direccion_fisica_entrada_segunda_tabla);
 			tercer_acesso_a_memoria(pcb,logger,configuraciones,marco);
+		}
+		else if (x==WRITE){
+			pcb->pc++;
+			int direccion_logica = list_get(pcb->lista_instrucciones,pcb->pc);
+			int direccion_fisica_entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion_logica);
+			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,direccion_fisica_entrada_segunda_tabla);
+			tercer_acesso_a_memoria(pcb,logger,configuraciones,marco);
+			pcb->pc++;
+			int atributo = list_get(pcb->lista_instrucciones,pcb->pc);
 		}
 		else if (x==EXIT) {
 			printf("Eecuto un EXIT\n");
@@ -166,14 +177,12 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 		return x;
 }
 
-int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones){
+int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int direccion_logica){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = PRIMER_ACCESO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
 	agregar_entero_a_paquete(paquete,pcb->pid);
-	pcb->pc++;
-	int y = list_get(pcb->lista_instrucciones,pcb->pc);
-	agregar_entero_a_paquete(paquete,y);
+	agregar_entero_a_paquete(paquete,direccion_logica);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
 	pthread_mutex_lock (&peticion_memoria_mutex);

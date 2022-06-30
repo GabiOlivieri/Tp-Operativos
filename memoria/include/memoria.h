@@ -40,6 +40,7 @@ typedef struct hilo_struct {
     t_log* logger;
     t_configuraciones* configuraciones;
     t_queue* cola;
+    t_list* tabla_paginas_primer_nivel;
 } t_hilo_struct;
 
 typedef struct hilo_struct_swap {
@@ -56,6 +57,7 @@ typedef struct planificador_struct {
 
 typedef struct fila_tabla_paginacion_1erNivel {
     int nro_tabla;
+    t_list* tabla_segundo_nivel;
 } t_fila_tabla_paginacion_1erNivel;
 
 typedef struct fila_tabla_paginacion_2doNivel {
@@ -81,7 +83,8 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb);
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos);
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos,
+                        t_list* tabla_paginas_primer_nivel);
 
 /**
 * @NAME: atender_cliente
