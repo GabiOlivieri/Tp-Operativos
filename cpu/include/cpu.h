@@ -1,5 +1,5 @@
-#ifndef PROJECT_CONSOLA_H_
-#define PROJECT_CONSOLA_H_
+#ifndef PROJECT_CPU_H_
+#define PROJECT_CPU_H_
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -8,7 +8,13 @@
 #include <shared/utils.h>
 #include <shared/socket.h>
 #include <shared/client.h>
+#include <shared/server.h>
 #include <commons/collections/list.h>
+#include <commons/collections/queue.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <semaphore.h>
+#include <time.h>
 
 typedef struct configuraciones {
     char *ip_memoria;
@@ -20,6 +26,12 @@ typedef struct configuraciones {
     char *puerto_escucha_dispatch;
     char *puerto_escucha_interrupt;
 } t_configuraciones;
+
+typedef struct hilo_struct {
+    int socket;
+    t_log* logger;
+    t_configuraciones* configuraciones;
+} t_hilo_struct;
 
 
 /**
@@ -34,6 +46,7 @@ void leer_config(t_config* config, t_configuraciones* configuraciones);
 */
 void leer_file(char* path,t_log* logger);
 
+
 /**
 * @NAME: liberar_memoria
 * @DESC: libera la memoria usada en este modulo.
@@ -45,5 +58,19 @@ void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* config
 * @DESC: libera la memoria usada de nombre structura para almacenar los valores obtenidos del config.
 */
 void nombre_free(t_configuraciones* configuraciones);
+
+t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
+
+t_pcb* recibir_pcb(char* buffer);
+
+int ejecutar_instruccion(t_pcb* pcb,t_configuraciones* configuraciones);
+
+int hay_interrupcion();
+
+void devolver_pcb(t_pcb* pcb,t_log* logger,int socket);
+
+int atender_cliente(void* arg);
+
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket);
 
 #endif

@@ -7,6 +7,7 @@
 #include <commons/collections/list.h>
 #include <stdint.h> 
 
+
 /**
 * @NAME: leer_archivo_completo
 * @DESC: lee y devuelve en formato de string una archivo.
