@@ -41,7 +41,6 @@ typedef struct hilo_struct {
     t_log* logger;
     t_configuraciones* configuraciones;
     t_queue* cola;
-    t_list* tabla_paginas_primer_nivel;
 } t_hilo_struct;
 
 typedef struct hilo_struct_swap {
@@ -84,8 +83,7 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb);
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos,
-                        t_list* tabla_paginas_primer_nivel);
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos);
 
 /**
 * @NAME: atender_cliente

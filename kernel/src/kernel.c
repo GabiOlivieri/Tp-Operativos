@@ -38,7 +38,6 @@ void planificador_largo_plazo(void* arg){
 	struct planificador_struct *p;
 	p = (struct planificador_struct*) arg;
 	while(1){
-		sleep(3);
 		pthread_mutex_lock (&planificador_largo_mutex_binario);
 		if(!queue_is_empty(p->colas->cola_new) && procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
 			int size = queue_size(p->colas->cola_new);
@@ -60,7 +59,6 @@ void planificador_corto_plazo(void* arg){
 	p = (struct planificador_struct*) arg;
 	int conexion_interrupt = crear_conexion(p->logger , "CPU Interrup" , p->configuraciones->ip_cpu , p->configuraciones->puerto_cpu_interrupt);
 	while(1){
-		sleep(3);
 		pthread_mutex_lock (&planificador_corto_mutex_binario);
 		if(!queue_is_empty(p->colas->cola_ready) && queue_is_empty(p->colas->cola_exec)){
 			if( strcmp(p->configuraciones->algoritmo_planificacion,"FIFO") == 0 ){
@@ -285,6 +283,7 @@ void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logge
 	else if (estado == TERMINATED){
 		log_info(logger, "El proceso %d terminó", pcb->pid);
 		printf("El proceso %d terminó y la cantidad de procesos en memoria ahora es %d\n", pcb->pid,--procesos_en_memoria);
+		pthread_mutex_unlock (&planificador_corto_mutex_binario);
 	}
 }
 
