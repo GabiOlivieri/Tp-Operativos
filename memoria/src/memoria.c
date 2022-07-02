@@ -3,8 +3,13 @@
 
 char* path_swap = NULL;
 char *socket_cpu = NULL;
+void* espacio_Contiguo_En_Memoria;
 
 pthread_mutex_t socket_cpu_mutex;
+pthread_mutex_t memoria_mutex;
+
+//Semaforos de while 1 con condicional
+pthread_mutex_t swap_mutex_binario;
 
 
 int main(int argc, char* argv[]) {
@@ -14,13 +19,12 @@ int main(int argc, char* argv[]) {
 
     leer_config(config,configuraciones);
 
-	void* espacio_Contiguo_En_Memoria[(configuraciones->tam_memoria/configuraciones->tam_pagina)-(configuraciones->entradas_por_tabla*configuraciones->entradas_por_tabla)];
 
 	t_list* tabla_paginas_primer_nivel = list_create();
 	t_queue* cola_suspendidos = queue_create();
 	iniciar_tablas(configuraciones,tabla_paginas_primer_nivel);
 
-	init_memoria(espacio_Contiguo_En_Memoria,configuraciones,logger);
+	init_memoria(configuraciones,logger);
 
 
     int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
@@ -83,6 +87,7 @@ void modulo_swap(void* arg){
 	p = (struct hilo_struct_swap*) arg;
 	printf("Arrancó modulo SWAP \n");
 	while(1){
+			pthread_mutex_lock (&swap_mutex_binario);
 			if(!queue_is_empty(p->cola)){
 			printf("Ingresó un proceso a la cola de suspendidos \n");
 			t_pcb* pcb = queue_pop(p->cola);
@@ -124,6 +129,7 @@ int atender_cliente(void* arg){
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
 				agregar_entero_a_paquete(paquete,2);
+				usleep(p->configuraciones->retardo_memoria);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
 				break;
@@ -137,6 +143,7 @@ int atender_cliente(void* arg){
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
 				agregar_entero_a_paquete(paquete,3);
+				usleep(p->configuraciones->retardo_memoria);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
 				break;
@@ -150,6 +157,7 @@ int atender_cliente(void* arg){
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
 				agregar_entero_a_paquete(paquete,5);
+				usleep(p->configuraciones->retardo_memoria);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
 				break;
@@ -178,6 +186,7 @@ int atender_cliente(void* arg){
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				int entrada_tabla_primer_nivel = asignar_tabla_primer_nivel(p->tabla_paginas_primer_nivel,p->configuraciones);
 				agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
+				usleep(p->configuraciones->retardo_memoria);
 				enviar_paquete(paquete,p->socket);
 				eliminar_paquete(paquete);
 				break;
@@ -193,6 +202,7 @@ int atender_cliente(void* arg){
 				pcb_swap->pid = leer_entero(buffer_swap,0);
 				pcb_swap->tiempo_bloqueo = leer_entero(buffer_swap,1);
 				queue_push(p->cola,pcb_swap);
+				pthread_mutex_unlock (&swap_mutex_binario);
     			break;
 			
     		case -1:
@@ -227,13 +237,21 @@ int asignar_tabla_primer_nivel(t_list* tabla_paginas_primer_nivel,t_configuracio
         	printf("Analizando la entrada de segundo nivel: %d\n",fila_tabla_primer_nivel->nro_tabla);
 		
 			t_list_iterator* iterator_segundo = list_iterator_create(fila_tabla_primer_nivel->tabla_segundo_nivel);
-    		while(list_iterator_has_next(iterator)){
-        	t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_segundo);
-			printf("Analizando marco: %d\n",fila_tabla_segundo_nivel->marco);
-				if(fila_tabla_segundo_nivel->p == 0) {
-					fila_tabla_segundo_nivel->p = 1;
+    		int i = 0;
+			while(list_iterator_has_next(iterator)){
+				t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_segundo);
+				printf("Analizando marco: %d\n",fila_tabla_segundo_nivel->marco);
+				printf("%d y indice %d\n",bitarray_test_bit(espacio_Contiguo_En_Memoria,i),i);
+				pthread_mutex_lock (&memoria_mutex);
+				if(!bitarray_test_bit(espacio_Contiguo_En_Memoria,i)) {
+					pthread_mutex_unlock (&memoria_mutex);
+					pthread_mutex_lock (&memoria_mutex);
+					bitarray_set_bit(espacio_Contiguo_En_Memoria,i);
+					pthread_mutex_unlock (&memoria_mutex);
 					return index;
-					}
+				}
+				pthread_mutex_unlock (&memoria_mutex);
+				i++;
 			}
 			list_iterator_destroy(iterator_segundo);
 			index++;
@@ -340,14 +358,14 @@ char* asignar_bytes(uint32_t cant_frames) {
     else
     {
         double c = (double) cant_frames;
-        bytes = (int) ceil(c/8.0); // no la reconoce cuando intentamos compilar, ver
+        bytes = (int) ceil(c/8.0);
     }
     buf = malloc(bytes);
     memset(buf,0,bytes);
     return buf;
 }
 
-void init_memoria(void *framesOcupados,t_configuraciones* configuraciones,t_log* logger){
+void init_memoria(t_configuraciones* configuraciones,t_log* logger){
 
 
     int memoriaPrincipal = malloc(sizeof(configuraciones->tam_memoria));
@@ -356,10 +374,11 @@ void init_memoria(void *framesOcupados,t_configuraciones* configuraciones,t_log*
     }
 
     t_list* listaTablasPrimerNivel = list_create();
-    int cantFrames = configuraciones->tam_memoria / configuraciones->tam_pagina;
+    uint32_t cantFrames = configuraciones->tam_memoria / configuraciones->tam_pagina;
     printf("RAM FRAMES: %d \n", cantFrames);
     char* data = asignar_bytes(cantFrames);
-    framesOcupados = bitarray_create_with_mode(data, cantFrames/8, MSB_FIRST);
+    espacio_Contiguo_En_Memoria = bitarray_create_with_mode(data, cantFrames/8, MSB_FIRST);
+
 }
 
 void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* configuraciones , int servidor){
