@@ -9,6 +9,7 @@
 #include <shared/server.h>
 #include <shared/client.h>
 #include <commons/collections/list.h>
+#include <commons/bitarray.h>
 #include <commons/config.h>
 #include <shared/utils.h>
 #include <commons/collections/queue.h>

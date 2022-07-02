@@ -14,11 +14,13 @@ int main(int argc, char* argv[]) {
 
     leer_config(config,configuraciones);
 
-	void* espacio_Contiguo_En_Memoria[configuraciones->tam_memoria];
+	void* espacio_Contiguo_En_Memoria[(configuraciones->tam_memoria/configuraciones->tam_pagina)-(configuraciones->entradas_por_tabla*configuraciones->entradas_por_tabla)];
 
 	t_list* tabla_paginas_primer_nivel = list_create();
 	t_queue* cola_suspendidos = queue_create();
 	iniciar_tablas(configuraciones,tabla_paginas_primer_nivel);
+
+	init_memoria(espacio_Contiguo_En_Memoria,configuraciones,logger);
 
 
     int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
@@ -41,7 +43,7 @@ void iniciar_tablas(t_configuraciones* configuraciones,t_list* tabla_paginas_pri
 
 		for(int j = 1; j <= configuraciones->entradas_por_tabla; j++){
 			t_fila_tabla_paginacion_2doNivel* filas_tabla_segundo_nivel = malloc(sizeof(t_fila_tabla_paginacion_2doNivel));
-			filas_tabla_segundo_nivel->marco = x;
+			filas_tabla_segundo_nivel->marco = NULL;
 			x++;
 			list_add(tabla_paginas_segundo_nivel,filas_tabla_segundo_nivel);
 		}
@@ -328,6 +330,36 @@ void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->marcos_por_proceso = config_get_int_value(config , "MARCOS_POR_PROCESO");
     configuraciones->retardo_swap = config_get_int_value(config , "RETARDO_SWAP");
 	path_swap = config_get_string_value(config , "PATH_SWAP");
+}
+
+char* asignar_bytes(uint32_t cant_frames) {
+    char* buf;
+    int bytes;
+    if(cant_frames < 8)
+        bytes = 1;
+    else
+    {
+        double c = (double) cant_frames;
+        bytes = (int) ceil(c/8.0); // no la reconoce cuando intentamos compilar, ver
+    }
+    buf = malloc(bytes);
+    memset(buf,0,bytes);
+    return buf;
+}
+
+void init_memoria(void *framesOcupados,t_configuraciones* configuraciones,t_log* logger){
+
+
+    int memoriaPrincipal = malloc(sizeof(configuraciones->tam_memoria));
+    if (memoriaPrincipal == NULL) {
+        log_error(logger, "Error al crear espacio contiguo de la memoria principal");
+    }
+
+    t_list* listaTablasPrimerNivel = list_create();
+    int cantFrames = configuraciones->tam_memoria / configuraciones->tam_pagina;
+    printf("RAM FRAMES: %d \n", cantFrames);
+    char* data = asignar_bytes(cantFrames);
+    framesOcupados = bitarray_create_with_mode(data, cantFrames/8, MSB_FIRST);
 }
 
 void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* configuraciones , int servidor){

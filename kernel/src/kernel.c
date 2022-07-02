@@ -64,27 +64,29 @@ void planificador_corto_plazo(void* arg){
 				int size = queue_size(p->colas->cola_ready);
 				printf("La cola READY tiene %d procesos para ejecutar\n",size);
 				if(size > 1){
+				for(int j = 0; j < size; j++){
 					t_pcb* elegido = queue_pop(p->colas->cola_ready);
-				for(int i = 0; i<(size-1); i++){
-					printf("Entro al for por %d vez \n", i);
+					for(int i = 0; i<(size-1); i++){
+						printf("Entro al for por %d vez \n", i);
 
-					aux1 = elegido->alfa * elegido->rafaga_anterior + (1 - elegido->alfa) * elegido->estimacion_inicial;
-					t_pcb* pcb2 = queue_pop(p->colas->cola_ready);
-					aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_inicial;
+						aux1 = elegido->alfa * elegido->rafaga_anterior + (1 - elegido->alfa) * elegido->estimacion_inicial;
+						t_pcb* pcb2 = queue_pop(p->colas->cola_ready);
+						aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_inicial;
 
-					if (aux2 > aux1){
-							printf("El pcb %d tiene mas pioridad %f que %d con pioridad %f\n",pcb2->pid,aux2,elegido->pid,aux1);
-							queue_push(aux,pcb2);}
-						
-					else {
-							printf("Un pcb %d tiene mas pioridad %f que %d con pioridad %f\n",elegido->pid,aux1,pcb2->pid,aux2);
-							queue_push(aux,elegido);
-							elegido = pcb2;
-							printf("El elegido pasa a ser %d", elegido->pid);
+						if (aux2 > aux1){
+								printf("El pcb %d tiene mas pioridad %f que %d con pioridad %f\n",pcb2->pid,aux2,elegido->pid,aux1);
+								queue_push(aux,pcb2);}
+							
+						else {
+								printf("Un pcb %d tiene mas pioridad %f que %d con pioridad %f\n",elegido->pid,aux1,pcb2->pid,aux2);
+								queue_push(aux,elegido);
+								elegido = pcb2;
+								printf("El elegido pasa a ser %d", elegido->pid);
+							}
 						}
-					}
-					queue_push(aux,elegido);
-					p->colas->cola_ready = aux;
+						queue_push(aux,elegido);
+						p->colas->cola_ready = aux;
+						}
 					}
 				t_pcb* pcb = queue_pop(p->colas->cola_ready);
 				t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
