@@ -123,23 +123,33 @@ void hilo_a_kernel(void* arg){
 	p = (struct hilo_struct_kernel*) arg;
 	printf("Arrancó hilo para kernel \n");
 	FILE *fp;
+	t_paquete* paquete;
 	while(1){
 			pthread_mutex_lock (&kernel_mutex_binario);
 			if(!queue_is_empty(p->cola)){
 			printf("Ingresó un nuevo proceso \n");
 			t_pcb* pcb = queue_pop(p->cola);
-			char *pidchar = {'0' + pcb->pid, '\0' };
-			fp = archivo_de_swap(pidchar);
-			fclose(fp);
-			t_paquete* paquete = crear_paquete();
-			paquete->codigo_operacion = DEVOLVER_PROCESO;
-			agregar_entero_a_paquete(paquete,pcb->pid);
-			t_list* tabla_paginas_primer_nivel = list_create();
-			iniciar_tablas(p->configuraciones,tabla_paginas_primer_nivel);
-			int entrada_tabla_primer_nivel = asignar_tabla_primer_nivel(tabla_paginas_primer_nivel,p->configuraciones);
-			agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
-			usleep(p->configuraciones->retardo_memoria);
-			enviar_paquete(paquete,socket_kernel);
+			if(pcb->size > p->configuraciones->tam_pagina * p->configuraciones->entradas_por_tabla * p->configuraciones->entradas_por_tabla ){
+					printf("El pcb recibido tiene tamaño más grande que el direccionamiento lógico del sistema\n");
+					free(pcb);
+					paquete = crear_paquete();
+					agregar_entero_a_paquete(paquete,-1);
+					enviar_paquete(paquete, socket_kernel);
+			}
+			else{
+				char *pidchar = {'0' + pcb->pid, '\0' };
+				fp = archivo_de_swap(pidchar);
+				fclose(fp);
+				paquete = crear_paquete();
+				paquete->codigo_operacion = DEVOLVER_PROCESO;
+				agregar_entero_a_paquete(paquete,pcb->pid);
+				t_list* tabla_paginas_primer_nivel = list_create();
+				iniciar_tablas(p->configuraciones,tabla_paginas_primer_nivel);
+				int entrada_tabla_primer_nivel = asignar_tabla_primer_nivel(tabla_paginas_primer_nivel,p->configuraciones);
+				agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
+				usleep(p->configuraciones->retardo_memoria);
+				enviar_paquete(paquete,socket_kernel);
+			}
 			eliminar_paquete(paquete);
 		}
 	}
@@ -225,6 +235,7 @@ int atender_cliente(void* arg){
 				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
 				queue_push(p->cola_procesos_a_inicializar,pcb);
 				pthread_mutex_unlock (&kernel_mutex_binario);
+
 				break;
 
     		case ENVIAR_A_SWAP:
