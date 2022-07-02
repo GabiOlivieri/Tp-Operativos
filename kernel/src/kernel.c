@@ -350,7 +350,6 @@ void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configu
    	char * buffer = recibir_buffer(&size, client_socket);
 	t_pcb* pcb  = crear_pcb(buffer,configuraciones,logger);
 	log_info(logger,"Se creo el PCB con Process Id: %d y Tamaño: %d\n",pcb->pid,pcb->size);
-	printf("Se agrego un proceso a la cola NEW\n");
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = INICIAR_PROCESO;
 	int conexion = crear_conexion(logger , "Memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
@@ -379,6 +378,7 @@ void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configu
 	int entrada_tabla_primer_nivel = leer_entero(buffer,1);
 	printf("Termine de recibirlo\n");
 	printf("El proceso %d tiene la entrada de tabla de primer nivel: %d\n",pcb->pid,entrada_tabla_primer_nivel);
+	printf("Se agrego un proceso a la cola NEW\n");
 	queue_push(cola_new,pcb);
 	pthread_mutex_unlock (&planificador_largo_mutex_binario);
 }

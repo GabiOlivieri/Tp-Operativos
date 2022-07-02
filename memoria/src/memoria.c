@@ -2,16 +2,19 @@
 
 
 char* path_swap = NULL;
+char *socket_kernel = NULL;
 char *socket_cpu = NULL;
 void* espacio_Contiguo_En_Memoria;
 void* bitmap_memoria;
 
 pthread_mutex_t socket_cpu_mutex;
+pthread_mutex_t socket_kernel_mutex;
 pthread_mutex_t bitmap_memoria_mutex;
 pthread_mutex_t memoria_mutex;
 
 //Semaforos de while 1 con condicional
 pthread_mutex_t swap_mutex_binario;
+pthread_mutex_t kernel_mutex_binario;
 
 
 int main(int argc, char* argv[]) {
@@ -23,6 +26,7 @@ int main(int argc, char* argv[]) {
 
 
 	t_queue* cola_suspendidos = queue_create();
+	t_queue* cola_procesos_a_crear = queue_create();
 
 	init_memoria(configuraciones,logger);
 
@@ -30,7 +34,8 @@ int main(int argc, char* argv[]) {
     int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
     
 	crear_modulo_swap(logger,configuraciones,cola_suspendidos);
-	manejar_conexion(logger,configuraciones,servidor,cola_suspendidos);
+	hilo_para_kernel(logger,configuraciones,cola_procesos_a_crear);
+	manejar_conexion(logger,configuraciones,servidor,cola_suspendidos,cola_procesos_a_crear);
     liberar_memoria(logger,config,configuraciones,servidor);
     return 0;
 }
@@ -58,14 +63,15 @@ void iniciar_tablas(t_configuraciones* configuraciones,t_list* tabla_paginas_pri
 	}
 }
 
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_queue* cola_suspendidos){
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_queue* cola_suspendidos,t_queue* cola_procesos_a_crear){
    	while(1){
         int client_socket = esperar_cliente(logger , "Memoria" , socket);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
 		hilo->logger = logger;
 		hilo->socket = client_socket;
 		hilo->configuraciones = configuraciones;
-		hilo->cola = cola_suspendidos;
+		hilo->cola_suspendidos = cola_suspendidos;
+		hilo->cola_procesos_a_inicializar = cola_procesos_a_crear;
         pthread_t hilo_servidor;
         pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
         pthread_detach(hilo_servidor);  
@@ -82,6 +88,16 @@ void crear_modulo_swap(t_log* logger, t_configuraciones* configuraciones,t_queue
     pthread_detach(hilo_del_modulo_swap);
 }
 
+void hilo_para_kernel(t_log* logger, t_configuraciones* configuraciones,t_queue* cola_procesos_a_crear){
+	t_hilo_struct_kernel* hilo = malloc(sizeof(t_hilo_struct_kernel));
+	hilo->logger = logger;
+	hilo->configuraciones = configuraciones;
+	hilo->cola = cola_procesos_a_crear;
+	pthread_t hilo_de_kernel;
+    pthread_create (&hilo_de_kernel, NULL , (void*) hilo_a_kernel,(void*) hilo);
+    pthread_detach(hilo_de_kernel);
+}
+
 void modulo_swap(void* arg){
 	struct hilo_struct_swap *p;
 	p = (struct hilo_struct_swap*) arg;
@@ -96,7 +112,34 @@ void modulo_swap(void* arg){
 			paquete->codigo_operacion = DEVOLVER_PROCESO;
 			printf("El proceso se desbloquea y vuelve a kernel\n");
 			agregar_entero_a_paquete(paquete,pcb->pid);
-			enviar_paquete(paquete,socket_cpu);
+			enviar_paquete(paquete,socket_kernel);
+			eliminar_paquete(paquete);
+		}
+	}
+}
+
+void hilo_a_kernel(void* arg){
+	struct hilo_struct_kernel *p;
+	p = (struct hilo_struct_kernel*) arg;
+	printf("Arrancó hilo para kernel \n");
+	FILE *fp;
+	while(1){
+			pthread_mutex_lock (&kernel_mutex_binario);
+			if(!queue_is_empty(p->cola)){
+			printf("Ingresó un nuevo proceso \n");
+			t_pcb* pcb = queue_pop(p->cola);
+			char *pidchar = {'0' + pcb->pid, '\0' };
+			fp = archivo_de_swap(pidchar);
+			fclose(fp);
+			t_paquete* paquete = crear_paquete();
+			paquete->codigo_operacion = DEVOLVER_PROCESO;
+			agregar_entero_a_paquete(paquete,pcb->pid);
+			t_list* tabla_paginas_primer_nivel = list_create();
+			iniciar_tablas(p->configuraciones,tabla_paginas_primer_nivel);
+			int entrada_tabla_primer_nivel = asignar_tabla_primer_nivel(tabla_paginas_primer_nivel,p->configuraciones);
+			agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
+			usleep(p->configuraciones->retardo_memoria);
+			enviar_paquete(paquete,socket_kernel);
 			eliminar_paquete(paquete);
 		}
 	}
@@ -174,28 +217,19 @@ int atender_cliente(void* arg){
 
 			case INICIAR_PROCESO:
 				log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
-				FILE *fp;
+				pthread_mutex_lock (&socket_kernel_mutex);
+				socket_kernel = p->socket;
+				pthread_mutex_unlock (&socket_kernel_mutex);
 				printf("Me llegó un INICIAR_PROCESO\n");
        			buffer = recibir_buffer(&size, p->socket);
 				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
-				char *pidchar = {'0' + pcb->pid, '\0' };
-				fp = archivo_de_swap(pidchar);
-				fclose(fp);
-				paquete = crear_paquete();
-				paquete->codigo_operacion = DEVOLVER_PROCESO;
-				agregar_entero_a_paquete(paquete,pcb->pid);
-				t_list* tabla_paginas_primer_nivel = list_create();
-				iniciar_tablas(p->configuraciones,tabla_paginas_primer_nivel);
-				int entrada_tabla_primer_nivel = asignar_tabla_primer_nivel(tabla_paginas_primer_nivel,p->configuraciones);
-				agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
-				usleep(p->configuraciones->retardo_memoria);
-				enviar_paquete(paquete,p->socket);
-				eliminar_paquete(paquete);
+				queue_push(p->cola_procesos_a_inicializar,pcb);
+				pthread_mutex_unlock (&kernel_mutex_binario);
 				break;
 
     		case ENVIAR_A_SWAP:
 				pthread_mutex_lock (&socket_cpu_mutex);
-				socket_cpu = p->socket;
+				socket_kernel = p->socket;
 				pthread_mutex_unlock (&socket_cpu_mutex);
     			log_info(p->logger, "Me llego un ENVIAR_A_SWAP\n");
 				printf("Me llego un ENVIAR_A_SWAP\n");
@@ -203,7 +237,7 @@ int atender_cliente(void* arg){
 				t_pcb* pcb_swap = malloc(sizeof(t_pcb));
 				pcb_swap->pid = leer_entero(buffer_swap,0);
 				pcb_swap->tiempo_bloqueo = leer_entero(buffer_swap,1);
-				queue_push(p->cola,pcb_swap);
+				queue_push(p->cola_suspendidos,pcb_swap);
 				pthread_mutex_unlock (&swap_mutex_binario);
     			break;
 			

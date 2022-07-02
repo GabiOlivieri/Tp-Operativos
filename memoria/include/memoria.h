@@ -40,8 +40,16 @@ typedef struct hilo_struct {
     int socket;
     t_log* logger;
     t_configuraciones* configuraciones;
-    t_queue* cola;
+    t_queue* cola_suspendidos;
+    t_queue* cola_procesos_a_inicializar;
 } t_hilo_struct;
+
+typedef struct hilo_struct_kernel {
+    int socket;
+    t_log* logger;
+    t_configuraciones* configuraciones;
+    t_queue* cola;
+} t_hilo_struct_kernel;
 
 typedef struct hilo_struct_swap {
     t_log* logger;
@@ -83,7 +91,7 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb);
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos);
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos,t_queue* cola_procesos_a_crear);
 
 /**
 * @NAME: atender_cliente
@@ -93,6 +101,8 @@ int atender_cliente(void* hilo_struct);
 
 
 int atender_cpu(void* arg);
+
+int atender_kernel(void* arg);
 
 /**
 * @NAME: atender_cliente
@@ -163,5 +173,7 @@ FILE* archivo_de_swap(char *pid);
 void modulo_swap(void* arg);
 
 void crear_modulo_swap(t_log* logger, t_configuraciones* configuraciones,t_queue* cola_suspendidos);
+
+void hilo_a_kernel(void* arg);
 
 #endif
