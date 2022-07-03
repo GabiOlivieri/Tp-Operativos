@@ -158,16 +158,16 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			pcb->pc++;
 			int direccion_logica = list_get(pcb->lista_instrucciones,pcb->pc);
 			direccion = mmu_traduccion(direccion_logica);
-			int entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
-			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,entrada_segunda_tabla,direccion.entrada_segundo_nivel,x);
+			int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
+			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,x);
 			tercer_acesso_a_memoria(pcb,logger,configuraciones,marco,direccion.desplazamiento,x);
 		}
 		else if (x==WRITE){
 			pcb->pc++;
 			int direccion_logica = list_get(pcb->lista_instrucciones,pcb->pc);
 			direccion = mmu_traduccion(direccion_logica);
-			int entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
-			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,entrada_segunda_tabla,direccion.entrada_segundo_nivel,x);
+			int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
+			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,x);
 			pcb->pc++;
 			int atributo = list_get(pcb->lista_instrucciones,pcb->pc);
 			tercer_acesso_a_memoria_a_escribir(pcb,logger,configuraciones,marco,direccion.desplazamiento,x,atributo);
@@ -210,11 +210,11 @@ int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configur
 	char * buffer = recibir_buffer(&size, socket);
 	int pid = leer_entero(buffer,0);
 	int direccion_fisica_entrada_segunda_tabla = leer_entero(buffer,1);
-	printf("La conexión por READ fue exitosa y el pid %d leyó y trajo la dirección a la entrada de la segunda tabla: %d\n",pid,direccion_fisica_entrada_segunda_tabla );
+	printf("La conexión fue exitosa y el pid %d leyó y trajo la dirección a la entrada de la segunda tabla: %d\n",pid,direccion_fisica_entrada_segunda_tabla );
 	return direccion_fisica_entrada_segunda_tabla;
 }
 
-int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int entrada_segunda_tabla, int tabla_segundo_nivel,op_ins codigo_operacion){
+int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones, int tabla_segundo_nivel,int entrada_segunda_tabla,op_ins codigo_operacion){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = SEGUNDO_ACCESSO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
@@ -232,7 +232,7 @@ int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configu
 	char * buffer = recibir_buffer(&size, socket);
 	int pid = leer_entero(buffer,0);
 	int marco = leer_entero(buffer,1);
-	printf("La conexión fue exitosa y el pid %d trajo el marco: %d\n",pid,marco);
+	printf("La conexión fue exitosa y el pid %d trajo la dirección: %d\n",pid,marco);
 	return marco;
 }
 

@@ -264,9 +264,9 @@ int atender_cliente(void* arg){
 				break;
 
     		case ENVIAR_A_SWAP:
-				pthread_mutex_lock (&socket_cpu_mutex);
+				pthread_mutex_lock (&socket_kernel_mutex);
 				socket_kernel = p->socket;
-				pthread_mutex_unlock (&socket_cpu_mutex);
+				pthread_mutex_unlock (&socket_kernel_mutex);
     			log_info(p->logger, "Me llego un ENVIAR_A_SWAP\n");
 				printf("Me llego un ENVIAR_A_SWAP\n");
        			char * buffer_swap = recibir_buffer(&size, p->socket);
@@ -369,9 +369,8 @@ int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
 		pthread_mutex_unlock (&tablas_segundo_nivel_mutex);
 		list_add(tabla_paginas_primer_nivel,filas_tabla_primer_nivel);
 	}
-	pthread_mutex_lock (&numeros_tablas_primer_nivel_mutex);
-	numeros_tablas_primer_nivel++;
-	pthread_mutex_unlock (&numeros_tablas_primer_nivel_mutex);	
+	numeros_tablas_primer_nivel++; // Se que acá habría que poner un mutex, pero lo pones y tira un error que hace parecer al payaso de it como algo lindo
+	
 	pthread_mutex_lock (&tablas_primer_nivel_mutex);
 	list_add(tablas_primer_nivel,tabla_paginas_primer_nivel);
 	pthread_mutex_unlock (&tablas_primer_nivel_mutex);
