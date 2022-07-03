@@ -232,6 +232,7 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb,t_c
     agregar_entero_a_paquete(paquete,pcb->pid);
     agregar_entero_a_paquete(paquete,pcb->pc);
     agregar_entero_a_paquete(paquete,cantidad_enteros);
+	agregar_entero_a_paquete(paquete,pcb->tabla_paginas);
     t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
     while(list_iterator_has_next(iterator)){
         int ins = list_iterator_next(iterator);
@@ -323,27 +324,6 @@ void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int soc
         pthread_detach(hilo_servidor);  
     }	
 }
-
-int atender_cpu(void* arg){
-	struct hilo_struct *p;
-	p = (struct hilo_struct*) arg;
-	while (1){
-		int cod_op = recibir_operacion(p->socket);
-		switch (cod_op) {
-		case MENSAJE:
-			recibir_mensaje(p->socket , p->logger);
-			break;
-		case -1:
-			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");
-			return EXIT_FAILURE;
-		default:
-			log_warning(p->logger,"Operacion desconocida");
-			break;
-		}
-	}
-	return EXIT_SUCCESS;
-}
-
 void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones,t_queue* cola_new){
 	log_info(logger,"Recibi un INICIAR_PROCESO desde consola\n");	
 	int size;
@@ -384,6 +364,7 @@ void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configu
 		printf("Termine de recibirlo\n");
 		printf("El proceso %d tiene la entrada de tabla de primer nivel: %d\n",pcb->pid,entrada_tabla_primer_nivel);
 		printf("Se agrego un proceso a la cola NEW\n");
+		pcb->tabla_paginas = entrada_tabla_primer_nivel;
 		queue_push(cola_new,pcb);
 		pthread_mutex_unlock (&planificador_largo_mutex_binario);
 	}

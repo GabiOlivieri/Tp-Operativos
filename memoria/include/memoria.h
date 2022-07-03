@@ -175,4 +175,9 @@ void crear_modulo_swap(t_log* logger, t_configuraciones* configuraciones,t_queue
 
 void hilo_a_kernel(void* arg);
 
+t_fila_tabla_paginacion_2doNivel* buscar_frame_libre(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones);
+
+int asignar_pagina_de_memoria();
+
+bool frame_valido(t_list* tabla_segundo_nivel,int marco_solicitado);
 #endif

@@ -141,6 +141,7 @@ int atender_cliente(void* arg){
 }
 
 int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
+		t_direccion direccion;
 		int x = list_get(pcb->lista_instrucciones,pcb->pc);
 		if (x==NO_OP) {
 			printf("Eecuto un NO_OP\n");
@@ -156,18 +157,20 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 		else if (x==READ){
 			pcb->pc++;
 			int direccion_logica = list_get(pcb->lista_instrucciones,pcb->pc);
-			int direccion_fisica_entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion_logica);
-			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,direccion_fisica_entrada_segunda_tabla);
-			tercer_acesso_a_memoria(pcb,logger,configuraciones,marco);
+			direccion = mmu_traduccion(direccion_logica);
+			int entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
+			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,entrada_segunda_tabla,direccion.entrada_segundo_nivel,x);
+			tercer_acesso_a_memoria(pcb,logger,configuraciones,marco,direccion.desplazamiento,x);
 		}
 		else if (x==WRITE){
 			pcb->pc++;
 			int direccion_logica = list_get(pcb->lista_instrucciones,pcb->pc);
-			int direccion_fisica_entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion_logica);
-			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,direccion_fisica_entrada_segunda_tabla);
-			tercer_acesso_a_memoria(pcb,logger,configuraciones,marco);
+			direccion = mmu_traduccion(direccion_logica);
+			int entrada_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
+			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,entrada_segunda_tabla,direccion.entrada_segundo_nivel,x);
 			pcb->pc++;
 			int atributo = list_get(pcb->lista_instrucciones,pcb->pc);
+			tercer_acesso_a_memoria_a_escribir(pcb,logger,configuraciones,marco,direccion.desplazamiento,x,atributo);
 		}
 		else if (x==EXIT) {
 			printf("Eecuto un EXIT\n");
@@ -177,12 +180,27 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 		return x;
 }
 
-int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int direccion_logica){
+t_direccion mmu_traduccion(int dir_logica){
+
+	t_direccion direccion;
+	int numero_pagina = floor(dir_logica / tamano_de_pagina);
+	direccion.entrada_primer_nivel = floor(numero_pagina / cantidad_de_entradas_por_tabla_de_paginas);
+	direccion.entrada_segundo_nivel = numero_pagina % cantidad_de_entradas_por_tabla_de_paginas;
+	direccion.desplazamiento = dir_logica - numero_pagina * tamano_de_pagina;
+
+	return direccion;
+}
+
+
+
+int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int entrada_tabla_primer_nivel){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = PRIMER_ACCESO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	printf("Envio %d y %d\n",pcb->tabla_paginas, entrada_tabla_primer_nivel);
 	agregar_entero_a_paquete(paquete,pcb->pid);
-	agregar_entero_a_paquete(paquete,direccion_logica);
+	agregar_entero_a_paquete(paquete,pcb->tabla_paginas);
+	agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
 	pthread_mutex_lock (&peticion_memoria_mutex);
@@ -196,12 +214,15 @@ int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configur
 	return direccion_fisica_entrada_segunda_tabla;
 }
 
-int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int direccion_fisica_entrada_segunda_tabla){
+int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int entrada_segunda_tabla, int tabla_segundo_nivel,op_ins codigo_operacion){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = SEGUNDO_ACCESSO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	printf("Envio %d, %d y %d \n",tabla_segundo_nivel, entrada_segunda_tabla,codigo_operacion );
 	agregar_entero_a_paquete(paquete,pcb->pid);
-	agregar_entero_a_paquete(paquete,direccion_fisica_entrada_segunda_tabla);
+	agregar_entero_a_paquete(paquete,tabla_segundo_nivel);
+	agregar_entero_a_paquete(paquete,entrada_segunda_tabla);
+	agregar_entero_a_paquete(paquete,codigo_operacion);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
 	pthread_mutex_lock (&peticion_memoria_mutex);
@@ -211,15 +232,19 @@ int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configu
 	char * buffer = recibir_buffer(&size, socket);
 	int pid = leer_entero(buffer,0);
 	int marco = leer_entero(buffer,1);
-	printf("La conexión por READ fue exitosa y el pid %d leyó y marco: %d\n",pid,marco);
+	printf("La conexión fue exitosa y el pid %d trajo el marco: %d\n",pid,marco);
+	return marco;
 }
 
-void tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int marco){
+void tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int marco, int desplazamiento,op_ins codigo_operacion){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = TERCER_ACCESSO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	printf("Envio %d, %d y %d \n",marco, desplazamiento,codigo_operacion );
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	agregar_entero_a_paquete(paquete,marco);
+	agregar_entero_a_paquete(paquete,desplazamiento);
+	agregar_entero_a_paquete(paquete,codigo_operacion);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
 	pthread_mutex_lock (&peticion_memoria_mutex);
@@ -228,8 +253,30 @@ void tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configu
 	int size;
 	char * buffer = recibir_buffer(&size, socket);
 	int pid = leer_entero(buffer,0);
-	int direccion_fisica = leer_entero(buffer,1);
-	printf("La conexión por READ fue exitosa y el pid %d leyó y dirección fisica: %d\n",pid,direccion_fisica);
+	int valor = leer_entero(buffer,1);
+	printf("La conexión fue exitosa y el pid %d leyó el valor: %d\n",pid,valor);
+}
+
+void tercer_acesso_a_memoria_a_escribir(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int marco, int desplazamiento,op_ins codigo_operacion,int valor){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = TERCER_ACCESSO_A_MEMORIA;
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	printf("Envio %d, %d, %d y %d \n",marco, desplazamiento,codigo_operacion,valor );
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	agregar_entero_a_paquete(paquete,marco);
+	agregar_entero_a_paquete(paquete,desplazamiento);
+	agregar_entero_a_paquete(paquete,codigo_operacion);
+	agregar_entero_a_paquete(paquete,valor);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	pthread_mutex_lock (&peticion_memoria_mutex);
+	int codigoOperacion = recibir_operacion(socket);
+	pthread_mutex_unlock (&peticion_memoria_mutex);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	int pid = leer_entero(buffer,0);
+	valor = leer_entero(buffer,1);
+	printf("La conexión por WRITE fue exitosa y el pid %d escribió el valor: %d\n",pid,valor);
 }
 
 void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
@@ -261,6 +308,7 @@ t_pcb* recibir_pcb(char* buffer){
 	t_pcb* pcb = malloc(sizeof(t_pcb));
 	pcb->pid = leer_entero(buffer,0); //Variable global que se incrementa
 	pcb->pc = leer_entero(buffer,1);
+	pcb->tabla_paginas = leer_entero(buffer,3);
 	printf("El Process Id del pcb recibido es: %d y su Program Counter es: %d\n",pcb->pid,pcb->pc);
 	pcb->estado = RUNNING;
 	pcb->tiempo_bloqueo = 0;
@@ -272,8 +320,8 @@ t_pcb* recibir_pcb(char* buffer){
 
 t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb){
 	t_list* lista = list_create();
-			int aux = 3;
-			int cantidad_enteros = 3 + leer_entero(buffer,2);
+			int aux = 4;
+			int cantidad_enteros = 4 + leer_entero(buffer,2);
 			printf("La lista de instrucciones contiene: \n");
 			for(; aux <= cantidad_enteros;aux++){
 				int x = leer_entero(buffer,aux);

@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include <math.h>
 #include <time.h>
 
 typedef struct configuraciones {
@@ -32,6 +33,12 @@ typedef struct hilo_struct {
     t_log* logger;
     t_configuraciones* configuraciones;
 } t_hilo_struct;
+
+typedef struct direccion {
+    int entrada_primer_nivel;
+    int entrada_segundo_nivel;
+    int desplazamiento;
+} t_direccion;
 
 
 /**
@@ -70,6 +77,8 @@ t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
 * @DESC: recibe el pcb de un buffer
 */
 t_pcb* recibir_pcb(char* buffer);
+
+t_direccion mmu_traduccion(int dir_logica);
 
 /**
 * @NAME: ejecutar_instruccion

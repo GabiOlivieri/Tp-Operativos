@@ -150,6 +150,7 @@ int atender_cliente(void* arg){
 	t_paquete* paquete;
 	int pid;
 	int direccion_logica;
+	int operacion;
 	while (1){
 		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {
@@ -164,11 +165,16 @@ int atender_cliente(void* arg){
 				printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
-				direccion_logica = leer_entero(buffer,1);
+				int nro_tabla_primer_nivel = leer_entero(buffer,1);
+				int entrada_tabla_primer_nivel = leer_entero(buffer,2);
+				pthread_mutex_lock (&tablas_primer_nivel_mutex);
+				t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
+				pthread_mutex_unlock (&tablas_primer_nivel_mutex);
+				t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_get(tabla_primer_nivel,entrada_tabla_primer_nivel);
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
-				agregar_entero_a_paquete(paquete,2);
+				agregar_entero_a_paquete(paquete,fila_tabla_primer_nivel->nro_tabla);
 				usleep(p->configuraciones->retardo_memoria);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
@@ -178,11 +184,32 @@ int atender_cliente(void* arg){
 				printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
-				direccion_logica = leer_entero(buffer,1);
+				int nro_tabla_segundo_nivel = leer_entero(buffer,1);
+				int entrada_tabla_segundo_nivel = leer_entero(buffer,2);
+				operacion = leer_entero(buffer,3);
+				pthread_mutex_lock (&tablas_segundo_nivel_mutex);
+				t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,nro_tabla_segundo_nivel);
+				pthread_mutex_unlock (&tablas_segundo_nivel_mutex);
+				t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel;
+				switch(operacion){
+					case READ:
+							printf("El frame está presente en memoria y va a contestarle a cpu \n");
+							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
+						break;
+					case WRITE:
+						if (!frame_valido(tabla_segundo_nivel,entrada_tabla_segundo_nivel)){
+							printf("El frame no está presente en memoria y voy a escribirlo \n");
+							fila_tabla_segundo_nivel = buscar_frame_libre(tabla_segundo_nivel,p->configuraciones);
+						}else{
+							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
+						}
+						break;
+
+				}
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
-				agregar_entero_a_paquete(paquete,3);
+				agregar_entero_a_paquete(paquete,fila_tabla_segundo_nivel->marco);
 				usleep(p->configuraciones->retardo_memoria);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
@@ -192,11 +219,22 @@ int atender_cliente(void* arg){
 				printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
-				direccion_logica = leer_entero(buffer,1);
+				int marco = leer_entero(buffer,1);
+				int desplazamiento = leer_entero(buffer,2);
+				operacion = leer_entero(buffer,3);
+				int valor;
 				paquete = crear_paquete();
-    			paquete->codigo_operacion = DEVOLVER_PROCESO;
+				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
-				agregar_entero_a_paquete(paquete,5);
+				switch(operacion){
+					case READ:
+						break;
+					case WRITE:
+						valor = leer_entero(buffer,4);
+						espacio_Contiguo_En_Memoria[marco+desplazamiento] = valor;
+
+				}
+				agregar_entero_a_paquete(paquete,espacio_Contiguo_En_Memoria[marco+desplazamiento]);
 				usleep(p->configuraciones->retardo_memoria);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
@@ -250,6 +288,38 @@ int atender_cliente(void* arg){
 	return EXIT_SUCCESS;	
 }
 
+bool frame_valido(t_list* tabla_segundo_nivel,int marco_solicitado){
+	t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,marco_solicitado);
+	return fila_tabla_segundo_nivel->p != 0;
+}
+
+t_fila_tabla_paginacion_2doNivel* buscar_frame_libre(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones){
+	t_list_iterator* iterator = list_iterator_create(tabla_segundo_nivel);
+	while(list_iterator_has_next(iterator)){
+        t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator);
+        printf("Analizando la entrada de segundo nivel: %d\n",iterator->index);
+		if(fila_tabla_segundo_nivel-> p == 0){
+			fila_tabla_segundo_nivel->p = 1;
+			fila_tabla_segundo_nivel->m = 1;
+			fila_tabla_segundo_nivel->u = 1;
+			fila_tabla_segundo_nivel->marco = asignar_pagina_de_memoria();
+			list_replace(tabla_segundo_nivel,iterator->index,fila_tabla_segundo_nivel);
+			return fila_tabla_segundo_nivel;
+		}
+	}
+}
+
+int asignar_pagina_de_memoria(){
+	for(int i = 0; i < bitarray_get_max_bit(bitmap_memoria); i++){
+		if (!bitarray_test_bit(bitmap_memoria,i)){
+			printf("Se carga la posición de memoria %d\n",i);
+			 bitarray_set_bit(bitmap_memoria,i);
+			 return i;
+		}
+	}
+	printf("No hay memoria xd\n");
+	return -1;
+}
 
 FILE* archivo_de_swap(char *pid){
 		const char* barra = "/";
