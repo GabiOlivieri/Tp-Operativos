@@ -65,7 +65,6 @@ typedef struct planificador_struct {
 
 typedef struct fila_tabla_paginacion_1erNivel {
     int nro_tabla;
-    t_list* tabla_segundo_nivel;
 } t_fila_tabla_paginacion_1erNivel;
 
 typedef struct fila_tabla_paginacion_2doNivel {

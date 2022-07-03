@@ -4,10 +4,19 @@
 char* path_swap = NULL;
 char *socket_kernel = NULL;
 char *socket_cpu = NULL;
-void* espacio_Contiguo_En_Memoria;
+int numeros_tablas_primer_nivel = 0;
+int numeros_tablas_segundo_nivel = 0;
+void* espacio_Contiguo_En_Memoria[];
 void* bitmap_memoria;
 
+t_list* tablas_primer_nivel;
+t_list* tablas_segundo_nivel;
+
 pthread_mutex_t socket_cpu_mutex;
+pthread_mutex_t tablas_primer_nivel_mutex;
+pthread_mutex_t tablas_segundo_nivel_mutex;
+pthread_mutex_t numeros_tablas_primer_nivel_mutex;
+pthread_mutex_t numeros_tablas_segundo_nivel_mutex;
 pthread_mutex_t socket_kernel_mutex;
 pthread_mutex_t bitmap_memoria_mutex;
 pthread_mutex_t memoria_mutex;
@@ -24,10 +33,13 @@ int main(int argc, char* argv[]) {
 
     leer_config(config,configuraciones);
 
+	espacio_Contiguo_En_Memoria[configuraciones->tam_memoria / configuraciones->tam_pagina];
 
+	// iniciar estructuras
+	tablas_primer_nivel = list_create();
+	tablas_segundo_nivel = list_create();
 	t_queue* cola_suspendidos = queue_create();
 	t_queue* cola_procesos_a_crear = queue_create();
-
 	init_memoria(configuraciones,logger);
 
 
@@ -38,29 +50,6 @@ int main(int argc, char* argv[]) {
 	manejar_conexion(logger,configuraciones,servidor,cola_suspendidos,cola_procesos_a_crear);
     liberar_memoria(logger,config,configuraciones,servidor);
     return 0;
-}
-
-void iniciar_tablas(t_configuraciones* configuraciones,t_list* tabla_paginas_primer_nivel){
-	int x = 1;
-
-	for(int i = 1; i <= configuraciones->entradas_por_tabla; i++){
-		t_fila_tabla_paginacion_1erNivel* filas_tabla_primer_nivel = malloc(sizeof(t_fila_tabla_paginacion_1erNivel));
-		filas_tabla_primer_nivel->nro_tabla = x;
-		t_list* tabla_paginas_segundo_nivel = list_create();
-		filas_tabla_primer_nivel->tabla_segundo_nivel = tabla_paginas_segundo_nivel;
-
-		for(int j = 1; j <= configuraciones->entradas_por_tabla; j++){
-			t_fila_tabla_paginacion_2doNivel* filas_tabla_segundo_nivel = malloc(sizeof(t_fila_tabla_paginacion_2doNivel));
-			filas_tabla_segundo_nivel->marco = NULL;
-			filas_tabla_segundo_nivel->p = 0;
-			filas_tabla_segundo_nivel->u = 0;
-			filas_tabla_segundo_nivel->m = 0;
-			x++;
-			list_add(tabla_paginas_segundo_nivel,filas_tabla_segundo_nivel);
-		}
-
-		list_add(tabla_paginas_primer_nivel,filas_tabla_primer_nivel);
-	}
 }
 
 void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_queue* cola_suspendidos,t_queue* cola_procesos_a_crear){
@@ -143,10 +132,8 @@ void hilo_a_kernel(void* arg){
 				paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pcb->pid);
-				t_list* tabla_paginas_primer_nivel = list_create();
-				iniciar_tablas(p->configuraciones,tabla_paginas_primer_nivel);
-				int entrada_tabla_primer_nivel = asignar_tabla_primer_nivel(tabla_paginas_primer_nivel,p->configuraciones);
-				agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
+				iniciar_tablas(p->configuraciones,pcb->size);
+				agregar_entero_a_paquete(paquete,(numeros_tablas_primer_nivel - 1));
 				usleep(p->configuraciones->retardo_memoria);
 				enviar_paquete(paquete,socket_kernel);
 			}
@@ -276,29 +263,49 @@ FILE* archivo_de_swap(char *pid){
 		return fopen(path, "w+");
 }
 
-int asignar_tabla_primer_nivel(t_list* tabla_paginas_primer_nivel,t_configuraciones* configuraciones){
-	int index = 0;
-		t_list_iterator* iterator = list_iterator_create(tabla_paginas_primer_nivel);
-    	while(list_iterator_has_next(iterator)){
-        	t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_iterator_next(iterator);
-        	printf("Analizando la entrada de segundo nivel: %d\n",fila_tabla_primer_nivel->nro_tabla);
-		
-			t_list_iterator* iterator_segundo = list_iterator_create(fila_tabla_primer_nivel->tabla_segundo_nivel);
-    		int i = 0;
-			while(list_iterator_has_next(iterator)){
-				t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_segundo);
-				printf("Analizando marco: %d\n",iterator_segundo->index);
-				if(fila_tabla_segundo_nivel->p == 0) {
-					fila_tabla_segundo_nivel->p = 1;
-					return index;
+int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
+	t_list* tabla_paginas_primer_nivel = list_create();
+	t_list* tabla_paginas_segundo_nivel = list_create();
+	int filas_de_tabla_primer_nivel = 0;
+
+	int tablas_necesarias = floor((tamano_necesario / configuraciones->tam_pagina) / configuraciones->entradas_por_tabla);
+	if (tablas_necesarias == 0) tablas_necesarias = 1; // la ecuación de arriba equivale a decir tablas a llenar, pero si no llena la 0 no importa, hay que generarle una igual
+
+		for(int i = 1; i <= configuraciones->entradas_por_tabla; i++){
+			t_fila_tabla_paginacion_1erNivel* filas_tabla_primer_nivel = malloc(sizeof(t_fila_tabla_paginacion_1erNivel));
+			filas_tabla_primer_nivel->nro_tabla = numeros_tablas_segundo_nivel;
+
+			pthread_mutex_lock (&numeros_tablas_segundo_nivel_mutex);
+			numeros_tablas_segundo_nivel++;
+			pthread_mutex_unlock (&numeros_tablas_segundo_nivel_mutex);	
+
+			t_list* tabla_paginas_segundo_nivel = list_create();
+
+		if (tablas_necesarias){	
+				for(int j = 1; j <= configuraciones->entradas_por_tabla; j++){
+					
+					t_fila_tabla_paginacion_2doNivel* filas_tabla_segundo_nivel = malloc(sizeof(t_fila_tabla_paginacion_2doNivel));
+					filas_tabla_segundo_nivel->marco = NULL;
+					filas_tabla_segundo_nivel->p = 0;
+					filas_tabla_segundo_nivel->u = 0;
+					filas_tabla_segundo_nivel->m = 0;
+					list_add(tabla_paginas_segundo_nivel,filas_tabla_segundo_nivel);
 				}
-				i++;
-			}
-			list_iterator_destroy(iterator_segundo);
-			index++;
+			printf("Creo pagina de segundo nivel \n");
+			tablas_necesarias--;		
+		}
+		pthread_mutex_lock (&tablas_segundo_nivel_mutex);
+		list_add(tablas_segundo_nivel,tabla_paginas_segundo_nivel);
+		pthread_mutex_unlock (&tablas_segundo_nivel_mutex);
+		list_add(tabla_paginas_primer_nivel,filas_tabla_primer_nivel);
 	}
-    list_iterator_destroy(iterator);
-	return -1;
+	pthread_mutex_lock (&numeros_tablas_primer_nivel_mutex);
+	numeros_tablas_primer_nivel++;
+	pthread_mutex_unlock (&numeros_tablas_primer_nivel_mutex);	
+	pthread_mutex_lock (&tablas_primer_nivel_mutex);
+	list_add(tablas_primer_nivel,tabla_paginas_primer_nivel);
+	pthread_mutex_unlock (&tablas_primer_nivel_mutex);
+	
 }
 
 
