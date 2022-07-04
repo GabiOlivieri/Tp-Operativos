@@ -113,7 +113,7 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
     			int instruccion=0;
     			int size;
-				time_t begin = time(NULL);
+				clock_t begin = clock();
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
        			while (!interrupcion && instruccion != EXIT && instruccion != IO){
@@ -122,8 +122,9 @@ int atender_cliente(void* arg){
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
 				pthread_mutex_unlock (&interrupcion_mutex);
-				time_t end = time(NULL);
-				printf("Tardó %d segundos \n", (end - begin) );
+				clock_t end = clock();
+				double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+				printf("Tardó %d clocks\n", time_spent );
 				pcb->rafaga_anterior= (end - begin);
 				//printf("Voy a devolver pcb\n");
        			devolver_pcb(pcb,p->logger,p->socket);
@@ -145,7 +146,7 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 		int x = list_get(pcb->lista_instrucciones,pcb->pc);
 		if (x==NO_OP) {
 			printf("Eecuto un NO_OP\n");
-			sleep(configuraciones->retardo_NOOP);
+			usleep(configuraciones->retardo_NOOP);
 		}
 		else if (x==IO){
 			pcb->pc++;

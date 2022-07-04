@@ -87,7 +87,7 @@ void planificador_corto_plazo(void* arg){
 								printf("Un pcb %d tiene mas pioridad %f que %d con pioridad %f\n",elegido->pid,aux1,pcb2->pid,aux2);
 								queue_push(aux,elegido);
 								elegido = pcb2;
-								printf("El elegido pasa a ser %d", elegido->pid);
+								printf("El elegido pasa a ser %d\n", elegido->pid);
 							}
 						}
 						queue_push(aux,elegido);
@@ -208,22 +208,6 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
     pthread_detach(hilo_planificador_mediano_plazo);
 }
 
-void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pcb* pcb){
-	t_paquete* paquete = crear_paquete();
-   	paquete->codigo_operacion = INICIAR_ESTRUCTURAS;
-	agregar_entero_a_paquete(paquete,pcb->pid);
-	int conexion = crear_conexion(logger , "Conexion con memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
-	enviar_paquete(paquete,conexion);
-	eliminar_paquete(paquete);
-	pthread_mutex_lock (&conexion_a_memoria_mutex);
-	int codigoOperacion = recibir_operacion(conexion);
-	pthread_mutex_unlock (&conexion_a_memoria_mutex);
-	int size;
-    char * buffer = recibir_buffer(&size, conexion);
-	close(conexion);
-	int tabla_paginas = leer_entero(buffer,0);
-	pcb->tabla_paginas = tabla_paginas;
-}
 void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb,t_colas_struct* colas){
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = INICIAR_PROCESO;

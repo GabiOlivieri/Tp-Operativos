@@ -92,6 +92,8 @@ void modulo_swap(void* arg){
 	p = (struct hilo_struct_swap*) arg;
 	printf("Arrancó modulo SWAP \n");
 	while(1){
+			printf("swap_mutex_binario lock\n");
+			printf("cantidad de procesos en swap %d \n",queue_size(p->cola));
 			pthread_mutex_lock (&swap_mutex_binario);
 			if(!queue_is_empty(p->cola)){
 			printf("Ingresó un proceso a la cola de suspendidos \n");
@@ -114,6 +116,7 @@ void hilo_a_kernel(void* arg){
 	FILE *fp;
 	t_paquete* paquete;
 	while(1){
+			printf("kernel_mutex_binario lock\n");
 			pthread_mutex_lock (&kernel_mutex_binario);
 			if(!queue_is_empty(p->cola)){
 			printf("Ingresó un nuevo proceso \n");
@@ -201,6 +204,7 @@ int atender_cliente(void* arg){
 							printf("El frame no está presente en memoria y voy a escribirlo \n");
 							fila_tabla_segundo_nivel = buscar_frame_libre(tabla_segundo_nivel,p->configuraciones);
 						}else{
+							printf("El frame está presente en memoria y voy a usarlo \n");
 							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
 						}
 						break;
@@ -259,6 +263,7 @@ int atender_cliente(void* arg){
        			buffer = recibir_buffer(&size, p->socket);
 				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
 				queue_push(p->cola_procesos_a_inicializar,pcb);
+				printf("kernel_mutex_binario unlock\n");
 				pthread_mutex_unlock (&kernel_mutex_binario);
 
 				break;
@@ -274,6 +279,8 @@ int atender_cliente(void* arg){
 				pcb_swap->pid = leer_entero(buffer_swap,0);
 				pcb_swap->tiempo_bloqueo = leer_entero(buffer_swap,1);
 				queue_push(p->cola_suspendidos,pcb_swap);
+				printf("swap_mutex_binario unlock\n");
+				printf("cantidad de procesos en swap %d \n",queue_size(p->cola_suspendidos));
 				pthread_mutex_unlock (&swap_mutex_binario);
     			break;
 			
