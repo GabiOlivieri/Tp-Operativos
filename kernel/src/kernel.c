@@ -14,6 +14,8 @@ pthread_mutex_t conexion_a_memoria_mutex;
 sem_t planificador_largo_mutex_binario;
 sem_t planificador_corto_mutex_binario;
 sem_t planificador_mediano_mutex_binario;
+sem_t recibir_de_memoria;
+sem_t enviar_a_memoria;
 
 
 
@@ -29,6 +31,8 @@ int main(int argc, char* argv[]) {
 	sem_init(&planificador_largo_mutex_binario, 0, 0);
 	sem_init(&planificador_corto_mutex_binario, 0, 0);
 	sem_init(&planificador_mediano_mutex_binario, 0, 0);
+	sem_init(&recibir_de_memoria, 0, 1);
+	sem_init(&enviar_a_memoria, 0, 1);
 	int servidor = iniciar_servidor(logger , "Kernel" , "127.0.0.1" , configuraciones->puerto_escucha);
 	manejar_conexion(logger,configuraciones,servidor,colas);
 	liberar_memoria(logger,config,configuraciones,servidor);
@@ -164,9 +168,13 @@ int mandar_y_recibir_confirmacion(void* arg){
 	int conexion = crear_conexion(p->logger , "Memoria" , p->configuraciones->ip_memoria ,p->configuraciones->puerto_memoria);
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
+	sem_wait(&enviar_a_memoria);
 	enviar_paquete(paquete,conexion);
+	sem_post(&enviar_a_memoria);
 	eliminar_paquete(paquete);
+	sem_wait(&recibir_de_memoria);
 	int codigoOperacion = recibir_operacion(conexion);
+	sem_post(&recibir_de_memoria);
 	int size;
 	char * buffer = recibir_buffer(&size, conexion);
 	printf("El proceso %d sale de la cola SUSPENDED-BLOCK\n",pcb->pid);
@@ -334,10 +342,14 @@ void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configu
         agregar_entero_a_paquete(paquete,ins);
     }
     list_iterator_destroy(iterator);
+	sem_wait(&enviar_a_memoria);
 	enviar_paquete(paquete,conexion);
+	sem_post(&enviar_a_memoria);
 	eliminar_paquete(paquete);
 	pthread_mutex_lock (&conexion_a_memoria_mutex);
+	sem_wait(&recibir_de_memoria);
 	int codigoOperacion = recibir_operacion(conexion);
+	sem_post(&recibir_de_memoria);
 	pthread_mutex_unlock (&conexion_a_memoria_mutex);
 	buffer = recibir_buffer(&size, conexion);
 	if(leer_entero(buffer,0) < 0){
