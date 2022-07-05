@@ -204,8 +204,17 @@ int atender_cliente(void* arg){
 				t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel;
 				switch(operacion){
 					case READ:
+						if(frame_valido(tabla_segundo_nivel,entrada_tabla_segundo_nivel)){
 							printf("El frame está presente en memoria y va a contestarle a cpu \n");
 							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
+							fila_tabla_segundo_nivel->u = 1;
+							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
+
+						}
+						else{
+							printf("El frame no está presente en memoria y va a contestarle a cpu con un 0 \n");
+							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
+						}
 						break;
 					case WRITE:
 						if (!frame_valido(tabla_segundo_nivel,entrada_tabla_segundo_nivel)){
@@ -214,6 +223,8 @@ int atender_cliente(void* arg){
 						}else{
 							printf("El frame está presente en memoria y voy a usarlo \n");
 							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
+							fila_tabla_segundo_nivel->u = 1;
+							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
 						}
 						break;
 
@@ -235,6 +246,8 @@ int atender_cliente(void* arg){
 				int desplazamiento = leer_entero(buffer,2);
 				operacion = leer_entero(buffer,3);
 				int valor;
+				if (marco + desplazamiento > p->configuraciones->tam_memoria / p->configuraciones->tam_pagina)
+					printf("La posición a la que busca acceder no existe\n");
 				paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
