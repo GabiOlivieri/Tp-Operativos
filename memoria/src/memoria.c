@@ -12,18 +12,16 @@ void* bitmap_memoria;
 t_list* tablas_primer_nivel;
 t_list* tablas_segundo_nivel;
 
-pthread_mutex_t socket_cpu_mutex;
 pthread_mutex_t tablas_primer_nivel_mutex;
 pthread_mutex_t tablas_segundo_nivel_mutex;
 pthread_mutex_t numeros_tablas_primer_nivel_mutex;
 pthread_mutex_t numeros_tablas_segundo_nivel_mutex;
 pthread_mutex_t socket_kernel_mutex;
-pthread_mutex_t bitmap_memoria_mutex;
-pthread_mutex_t memoria_mutex;
 
 //Semaforos de while 1 con condicional
-pthread_mutex_t swap_mutex_binario;
-pthread_mutex_t kernel_mutex_binario;
+sem_t sem; // swap
+sem_t kernel_mutex_binario;
+
 
 
 int main(int argc, char* argv[]) {
@@ -32,6 +30,9 @@ int main(int argc, char* argv[]) {
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
     leer_config(config,configuraciones);
+
+	sem_init(&sem, 0, 0);
+	sem_init(&kernel_mutex_binario, 0, 0);
 
 	espacio_Contiguo_En_Memoria[configuraciones->tam_memoria / configuraciones->tam_pagina];
 
@@ -92,21 +93,26 @@ void modulo_swap(void* arg){
 	p = (struct hilo_struct_swap*) arg;
 	printf("Arrancó modulo SWAP \n");
 	while(1){
-			printf("swap_mutex_binario lock\n");
-			printf("cantidad de procesos en swap %d \n",queue_size(p->cola));
-			pthread_mutex_lock (&swap_mutex_binario);
+			//printf("swap_mutex_binario lock\n");
+			//printf("cantidad de procesos en swap %d \n",queue_size(p->cola));
+			sem_wait(&sem);
 			if(!queue_is_empty(p->cola)){
-			printf("Ingresó un proceso a la cola de suspendidos \n");
-			t_pcb* pcb = queue_pop(p->cola);
-			pcb = bloquear_proceso(pcb,p->configuraciones);
-       		t_paquete* paquete = crear_paquete();
-			paquete->codigo_operacion = DEVOLVER_PROCESO;
-			printf("El proceso se desbloquea y vuelve a kernel\n");
-			agregar_entero_a_paquete(paquete,pcb->pid);
-			enviar_paquete(paquete,socket_kernel);
-			eliminar_paquete(paquete);
-		}
+				printf("Ingresó un proceso a la cola de suspendidos \n");
+				t_pcb* pcb = queue_pop(p->cola);
+				pcb = bloquear_proceso(pcb,p->configuraciones);
+				t_paquete* paquete = crear_paquete();
+				paquete->codigo_operacion = DEVOLVER_PROCESO;
+				printf("El proceso se desbloquea y vuelve a kernel\n");
+				agregar_entero_a_paquete(paquete,pcb->pid);
+				pthread_mutex_lock (&socket_kernel_mutex);
+				enviar_paquete(paquete,socket_kernel);
+				pthread_mutex_unlock (&socket_kernel_mutex);
+				eliminar_paquete(paquete);
+				printf("Terminó de devolver el paquete\n");
+
+			}
 	}
+	printf("Termina hilo swap\n");
 }
 
 void hilo_a_kernel(void* arg){
@@ -117,7 +123,7 @@ void hilo_a_kernel(void* arg){
 	t_paquete* paquete;
 	while(1){
 			printf("kernel_mutex_binario lock\n");
-			pthread_mutex_lock (&kernel_mutex_binario);
+			sem_wait(&kernel_mutex_binario);
 			if(!queue_is_empty(p->cola)){
 			printf("Ingresó un nuevo proceso \n");
 			t_pcb* pcb = queue_pop(p->cola);
@@ -126,7 +132,9 @@ void hilo_a_kernel(void* arg){
 					free(pcb);
 					paquete = crear_paquete();
 					agregar_entero_a_paquete(paquete,-1);
+					pthread_mutex_lock (&socket_kernel_mutex);
 					enviar_paquete(paquete, socket_kernel);
+					pthread_mutex_unlock (&socket_kernel_mutex);
 			}
 			else{
 				char *pidchar = {'0' + pcb->pid, '\0' };
@@ -264,7 +272,7 @@ int atender_cliente(void* arg){
 				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
 				queue_push(p->cola_procesos_a_inicializar,pcb);
 				printf("kernel_mutex_binario unlock\n");
-				pthread_mutex_unlock (&kernel_mutex_binario);
+				sem_post(&kernel_mutex_binario);
 
 				break;
 
@@ -281,7 +289,7 @@ int atender_cliente(void* arg){
 				queue_push(p->cola_suspendidos,pcb_swap);
 				printf("swap_mutex_binario unlock\n");
 				printf("cantidad de procesos en swap %d \n",queue_size(p->cola_suspendidos));
-				pthread_mutex_unlock (&swap_mutex_binario);
+				sem_post(&sem);
     			break;
 			
     		case -1:
