@@ -304,6 +304,9 @@ void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logge
 				
 			}
 			else{
+				sem_post (&planificador_largo_mutex_binario);
+				sem_post (&planificador_corto_binario);
+				usleep(pcb->tiempo_bloqueo * 1000);
 				printf("El proceso %d sale de la cola BLOCK\n",pcb->pid);
 				pthread_mutex_lock (&cola_ready_mutex);
 				queue_push(colas->cola_ready,pcb);

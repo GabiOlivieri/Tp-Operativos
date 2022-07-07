@@ -301,6 +301,10 @@ int atender_cliente(void* arg){
 				printf("cantidad de procesos en swap %d \n",queue_size(p->cola_suspendidos));
 				sem_post(&sem);
     			break;
+
+			case FINALIZAR_PROCESO:
+
+				break;
 			
     		case -1:
     			log_error(p->logger, "el cliente se desconecto. Terminando servidor");
@@ -317,6 +321,18 @@ bool frame_valido(t_list* tabla_segundo_nivel,int marco_solicitado){
 	t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,marco_solicitado);
 	return fila_tabla_segundo_nivel->p != 0;
 }
+
+void limpiar_memoria(){
+	for(int i = 0; i < bitarray_get_max_bit(bitmap_memoria); i++){
+		if (!bitarray_test_bit(bitmap_memoria,i)){
+			printf("Se carga la posición de memoria %d\n",i);
+			 bitarray_set_bit(bitmap_memoria,i);
+			 return i;
+		}
+	}
+}
+
+
 
 t_fila_tabla_paginacion_2doNivel* buscar_frame_libre(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones){
 	t_list_iterator* iterator = list_iterator_create(tabla_segundo_nivel);

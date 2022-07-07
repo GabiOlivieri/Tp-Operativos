@@ -16,7 +16,8 @@ typedef enum
     HANDSHAKE,
     GUARDAR_EN_SWAP,
     ESTRUCTURAS_CREADAS,
-    DEVOLVER_PROCESO
+    DEVOLVER_PROCESO,
+    FINALIZAR_PROCESO
 } op_code;
 
 typedef enum

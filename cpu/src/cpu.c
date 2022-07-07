@@ -146,6 +146,7 @@ int atender_cliente(void* arg){
     			instruccion = ejecutar_instruccion(p->logger,pcb,p->configuraciones);
 				if (instruccion == NO_OP) contador++;
 				}
+				if(instruccion == EXIT) notificar_fin(p->logger,pcb,p->configuraciones);
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
 				pthread_mutex_unlock (&interrupcion_mutex);
@@ -166,6 +167,20 @@ int atender_cliente(void* arg){
     		}
 	}
 	return EXIT_SUCCESS;	
+}
+
+int notificar_fin(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
+	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = FINALIZAR_PROCESO;
+	printf("Notifico fin de proceso \n" );
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	enviar_paquete(paquete,socket);
+	eliminar_paquete(paquete);
+	int codigoOperacion = recibir_operacion(socket);
+	int size;
+	char * buffer = recibir_buffer(&size, socket);
+	int pid = leer_entero(buffer,0);
 }
 
 int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
