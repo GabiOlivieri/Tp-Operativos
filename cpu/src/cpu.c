@@ -8,6 +8,7 @@ pthread_mutex_t interrupcion_mutex;
 pthread_mutex_t peticion_memoria_mutex;
 
 
+
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
     t_config* config = config_create("./cpu.conf");
@@ -15,6 +16,9 @@ int main(int argc, char* argv[]) {
 
     leer_config(config,configuraciones);
 	handshake_memoria(logger,configuraciones);
+
+	t_list* tlb = crear_TLB(configuraciones->entradas_TLB);
+
 
     int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
     manejar_interrupciones(logger,configuraciones);
@@ -35,6 +39,27 @@ void handshake_memoria(t_log* logger,t_configuraciones* configuraciones){
 	cantidad_de_entradas_por_tabla_de_paginas = leer_entero(buffer,0);
 	tamano_de_pagina = leer_entero(buffer,1);
 	close(socket);
+}
+
+t_list* crear_TLB(int cant_entradas){
+	t_list* tlb = list_create();
+	for(int i = 0; i < cant_entradas; i++){
+		t_fila_tlb* fila_tlb = malloc(sizeof(t_fila_tlb));
+		fila_tlb->pagina = NULL;
+		fila_tlb->marco = NULL;
+		list_add(tlb,fila_tlb);
+	}
+	return tlb;
+}
+
+void limpiar_TLB(t_list* tlb){
+	int limite = list_size(tlb);
+	for(int i = 0; i < limite ; i++){
+		t_fila_tlb* fila_tlb = list_get(tlb,i);
+		fila_tlb->pagina = NULL;
+		fila_tlb->marco = NULL;
+		list_replace(tlb,i,fila_tlb);
+	}
 }
 
 void manejar_interrupciones(t_log* logger, t_configuraciones* configuraciones){
@@ -113,19 +138,18 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
     			int instruccion=0;
     			int size;
-				clock_t begin = clock();
+				int rafaga=0;
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
        			while (!interrupcion && instruccion != EXIT && instruccion != IO){
     			instruccion = ejecutar_instruccion(p->logger,pcb,p->configuraciones);
+				rafaga++;
 				}
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
 				pthread_mutex_unlock (&interrupcion_mutex);
-				clock_t end = clock();
-				double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-				printf("Tardó %d clocks\n", time_spent );
-				pcb->rafaga_anterior= (end - begin);
+				printf("Hizo %d rafagas\n", rafaga );
+				pcb->rafaga_anterior= rafaga;
 				//printf("Voy a devolver pcb\n");
        			devolver_pcb(pcb,p->logger,p->socket);
     			break;
@@ -146,7 +170,7 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 		int x = list_get(pcb->lista_instrucciones,pcb->pc);
 		if (x==NO_OP) {
 			printf("Eecuto un NO_OP\n");
-			usleep(configuraciones->retardo_NOOP);
+			usleep(configuraciones->retardo_NOOP * 1000);
 		}
 		else if (x==IO){
 			pcb->pc++;
@@ -204,9 +228,7 @@ int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configur
 	agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
-	pthread_mutex_lock (&peticion_memoria_mutex);
 	int codigoOperacion = recibir_operacion(socket);
-	pthread_mutex_unlock (&peticion_memoria_mutex);
 	int size;
 	char * buffer = recibir_buffer(&size, socket);
 	int pid = leer_entero(buffer,0);
@@ -226,9 +248,7 @@ int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configu
 	agregar_entero_a_paquete(paquete,codigo_operacion);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
-	pthread_mutex_lock (&peticion_memoria_mutex);
 	int codigoOperacion = recibir_operacion(socket);
-	pthread_mutex_unlock (&peticion_memoria_mutex);
 	int size;
 	char * buffer = recibir_buffer(&size, socket);
 	int pid = leer_entero(buffer,0);
@@ -248,9 +268,7 @@ void tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configu
 	agregar_entero_a_paquete(paquete,codigo_operacion);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
-	pthread_mutex_lock (&peticion_memoria_mutex);
 	int codigoOperacion = recibir_operacion(socket);
-	pthread_mutex_unlock (&peticion_memoria_mutex);
 	int size;
 	char * buffer = recibir_buffer(&size, socket);
 	int pid = leer_entero(buffer,0);
@@ -270,9 +288,7 @@ void tercer_acesso_a_memoria_a_escribir(t_pcb* pcb,t_log* logger,t_configuracion
 	agregar_entero_a_paquete(paquete,valor);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
-	pthread_mutex_lock (&peticion_memoria_mutex);
 	int codigoOperacion = recibir_operacion(socket);
-	pthread_mutex_unlock (&peticion_memoria_mutex);
 	int size;
 	char * buffer = recibir_buffer(&size, socket);
 	int pid = leer_entero(buffer,0);

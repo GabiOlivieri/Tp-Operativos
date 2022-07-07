@@ -40,6 +40,11 @@ typedef struct direccion {
     int desplazamiento;
 } t_direccion;
 
+typedef struct tlb{
+    int pagina;
+    int marco;
+} t_fila_tlb;
+
 
 /**
 * @NAME: leer_config
@@ -104,4 +109,5 @@ int atender_interrupcion(void* arg);
 
 void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket);
 
+t_list* crear_TLB(int cant_entradas);
 #endif

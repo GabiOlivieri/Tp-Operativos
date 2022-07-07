@@ -23,7 +23,7 @@ pthread_mutex_t socket_kernel_swap_mutex;
 sem_t sem; // swap
 sem_t kernel_mutex_binario;
 
-sem_t contestar_kernel_swap;
+sem_t cliente_servidor_kernel;
 
 
 
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
 
 	sem_init(&sem, 0, 0);
 	sem_init(&kernel_mutex_binario, 0, 0);
-	sem_init(&contestar_kernel_swap, 0, 1);
+	sem_init(&cliente_servidor_kernel, 0, 1);
 
 	espacio_Contiguo_En_Memoria[configuraciones->tam_memoria / configuraciones->tam_pagina];
 
@@ -97,8 +97,7 @@ void modulo_swap(void* arg){
 	p = (struct hilo_struct_swap*) arg;
 	printf("Arrancó modulo SWAP \n");
 	while(1){
-			//printf("swap_mutex_binario lock\n");
-			//printf("cantidad de procesos en swap %d \n",queue_size(p->cola));
+			printf("swap_mutex_binario lock\n");
 
 			sem_wait(&sem);
 			if(!queue_is_empty(p->cola)){
@@ -136,21 +135,20 @@ void hilo_a_kernel(void* arg){
 					free(pcb);
 					paquete = crear_paquete();
 					agregar_entero_a_paquete(paquete,-1);
-					pthread_mutex_lock (&socket_kernel_mutex);
 					enviar_paquete(paquete, socket_kernel);
-					pthread_mutex_unlock (&socket_kernel_mutex);
 			}
 			else{
 				char *pidchar = {'0' + pcb->pid, '\0' };
 				fp = archivo_de_swap(pidchar);
 				fclose(fp);
 				paquete = crear_paquete();
-				paquete->codigo_operacion = DEVOLVER_PROCESO;
+				paquete->codigo_operacion = ESTRUCTURAS_CREADAS;
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				iniciar_tablas(p->configuraciones,pcb->size);
 				agregar_entero_a_paquete(paquete,(numeros_tablas_primer_nivel - 1));
-				usleep(p->configuraciones->retardo_memoria);
+				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete,socket_kernel);
+				printf("Devuelvo el proceso %d a kernel", pcb->pid);
 			}
 			eliminar_paquete(paquete);
 		}
@@ -182,15 +180,13 @@ int atender_cliente(void* arg){
 				pid = leer_entero(buffer,0);
 				int nro_tabla_primer_nivel = leer_entero(buffer,1);
 				int entrada_tabla_primer_nivel = leer_entero(buffer,2);
-				pthread_mutex_lock (&tablas_primer_nivel_mutex);
 				t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
-				pthread_mutex_unlock (&tablas_primer_nivel_mutex);
 				t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_get(tabla_primer_nivel,entrada_tabla_primer_nivel);
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
 				agregar_entero_a_paquete(paquete,fila_tabla_primer_nivel->nro_tabla);
-				usleep(p->configuraciones->retardo_memoria);
+				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
 				break;
@@ -202,9 +198,7 @@ int atender_cliente(void* arg){
 				int nro_tabla_segundo_nivel = leer_entero(buffer,1);
 				int entrada_tabla_segundo_nivel = leer_entero(buffer,2);
 				operacion = leer_entero(buffer,3);
-				pthread_mutex_lock (&tablas_segundo_nivel_mutex);
 				t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,nro_tabla_segundo_nivel);
-				pthread_mutex_unlock (&tablas_segundo_nivel_mutex);
 				t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel;
 				switch(operacion){
 					case READ:
@@ -237,7 +231,7 @@ int atender_cliente(void* arg){
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
 				agregar_entero_a_paquete(paquete,fila_tabla_segundo_nivel->marco);
-				usleep(p->configuraciones->retardo_memoria);
+				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
 				break;
@@ -264,7 +258,7 @@ int atender_cliente(void* arg){
 
 				}
 				agregar_entero_a_paquete(paquete,espacio_Contiguo_En_Memoria[marco+desplazamiento]);
-				usleep(p->configuraciones->retardo_memoria);
+				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
 				break;
@@ -378,9 +372,7 @@ int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
 			t_fila_tabla_paginacion_1erNivel* filas_tabla_primer_nivel = malloc(sizeof(t_fila_tabla_paginacion_1erNivel));
 			filas_tabla_primer_nivel->nro_tabla = numeros_tablas_segundo_nivel;
 
-			pthread_mutex_lock (&numeros_tablas_segundo_nivel_mutex);
 			numeros_tablas_segundo_nivel++;
-			pthread_mutex_unlock (&numeros_tablas_segundo_nivel_mutex);	
 
 			t_list* tabla_paginas_segundo_nivel = list_create();
 
@@ -397,16 +389,12 @@ int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
 			printf("Creo pagina de segundo nivel \n");
 			tablas_necesarias--;		
 		}
-		pthread_mutex_lock (&tablas_segundo_nivel_mutex);
 		list_add(tablas_segundo_nivel,tabla_paginas_segundo_nivel);
-		pthread_mutex_unlock (&tablas_segundo_nivel_mutex);
 		list_add(tabla_paginas_primer_nivel,filas_tabla_primer_nivel);
 	}
 	numeros_tablas_primer_nivel++; // Se que acá habría que poner un mutex, pero lo pones y tira un error que hace parecer al payaso de it como algo lindo
 	
-	pthread_mutex_lock (&tablas_primer_nivel_mutex);
 	list_add(tablas_primer_nivel,tabla_paginas_primer_nivel);
-	pthread_mutex_unlock (&tablas_primer_nivel_mutex);
 	
 }
 
@@ -435,26 +423,21 @@ t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
 	pcb->tiempo_bloqueo= leer_entero(buffer,7);
 	pcb->rafaga_anterior = leer_entero(buffer,8);
 	cantidad_enteros = cantidad_enteros + 8;
-	printf("la cantidad de instrucciones es: %d\n",cantidad_enteros);
 	for(int i = 9; i <= cantidad_enteros;i++){
 		int x = leer_entero(buffer,i);
 		if(x==NO_OP){
-			printf("NO_OP\n");
 			list_add(lista,x);
 		}else if(x==IO){
-			printf("IO\n");
 			list_add(lista,x);
 			i++;
 			int y = leer_entero(buffer,i);
 			list_add(lista,y);
 		}else if(x==READ){
-			printf("READ\n");
 			list_add(lista,x);
 			i++;
 			int y = leer_entero(buffer,i);
 			list_add(lista,y);
 		}else if(x==WRITE){
-			printf("WRITE\n");
 			list_add(lista,x);
 			i++;
 			int y = leer_entero(buffer,i);
@@ -463,7 +446,6 @@ t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
 			int z = leer_entero(buffer,i);
 			list_add(lista,z);
 		}else if(x==COPY){
-			printf("COPY\n");
 			list_add(lista,x);
 			i++;
 			int y = leer_entero(buffer,i);
@@ -472,7 +454,6 @@ t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
 			int z = leer_entero(buffer,i);
 			list_add(lista,z);
 		}else if(x==EXIT){
-			printf("EXIT\n");
 			list_add(lista,x);
 		}
 	}
@@ -483,7 +464,7 @@ t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
 
 t_pcb* bloquear_proceso(t_pcb* pcb,t_configuraciones* configuraciones){
 	printf("El Process Id del pcb recibido es: %d y se va a quedar: %d \n",pcb->pid,pcb->tiempo_bloqueo);
-    usleep(pcb->tiempo_bloqueo + configuraciones->retardo_swap);
+    usleep((pcb->tiempo_bloqueo * 1000) + (configuraciones->retardo_swap * 1000));
 	return pcb;
 }
 
