@@ -290,7 +290,8 @@ void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logge
 	pcb->pc=pc;
 	pcb->estado=estado;
 	pcb->tiempo_bloqueo= tiempo_bloqueo;
-	pcb->rafaga_anterior=rafaga_anterior;
+	pcb->rafaga_anterior= pcb->estimacion_inicial;
+	pcb->estimacion_inicial = rafaga_anterior;
 	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
 	if(estado == BLOCKED ){
 			printf("El proceso %d pasa a la cola BLOCK\n",pcb->pid);

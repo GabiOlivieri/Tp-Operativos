@@ -138,18 +138,21 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
     			int instruccion=0;
     			int size;
-				int rafaga=0;
+				int contador=0;
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
+				clock_t begin = clock();
        			while (!interrupcion && instruccion != EXIT && instruccion != IO){
     			instruccion = ejecutar_instruccion(p->logger,pcb,p->configuraciones);
-				rafaga++;
+				if (instruccion == NO_OP) contador++;
 				}
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
 				pthread_mutex_unlock (&interrupcion_mutex);
-				printf("Hizo %d rafagas\n", rafaga );
-				pcb->rafaga_anterior= rafaga;
+				clock_t end = clock();
+				double rafaga = (double)(end - begin) / CLOCKS_PER_SEC;
+				printf("Hizo %f rafagas\n", rafaga * 1000000 );
+				pcb->rafaga_anterior= rafaga * 1000000;
 				//printf("Voy a devolver pcb\n");
        			devolver_pcb(pcb,p->logger,p->socket);
     			break;
@@ -169,13 +172,13 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 		t_direccion direccion;
 		int x = list_get(pcb->lista_instrucciones,pcb->pc);
 		if (x==NO_OP) {
-			printf("Eecuto un NO_OP\n");
+			printf("Ejecuto un NO_OP\n");
 			usleep(configuraciones->retardo_NOOP * 1000);
 		}
 		else if (x==IO){
 			pcb->pc++;
 			int y = list_get(pcb->lista_instrucciones,pcb->pc);
-			printf("Eecuto un IO de argumento %d\n",y);
+			printf("Ejecuto un IO de argumento %d\n",y);
 			pcb->tiempo_bloqueo= y;
 			pcb->estado = BLOCKED;
 		}
@@ -198,7 +201,7 @@ int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			tercer_acesso_a_memoria_a_escribir(pcb,logger,configuraciones,marco,direccion.desplazamiento,x,atributo);
 		}
 		else if (x==EXIT) {
-			printf("Eecuto un EXIT\n");
+			printf("Ejecuto un EXIT\n");
 			pcb->estado = TERMINATED;
 			return x;}
 		pcb->pc++;

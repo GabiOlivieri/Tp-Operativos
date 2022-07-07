@@ -146,7 +146,6 @@ void hilo_a_kernel(void* arg){
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				iniciar_tablas(p->configuraciones,pcb->size);
 				agregar_entero_a_paquete(paquete,(numeros_tablas_primer_nivel - 1));
-				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete,socket_kernel);
 				printf("Devuelvo el proceso %d a kernel", pcb->pid);
 			}
