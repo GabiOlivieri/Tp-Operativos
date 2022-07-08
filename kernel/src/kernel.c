@@ -3,7 +3,9 @@
 int pid = 0;
 int procesos_en_memoria = 0;
 int interrupcion_enviada = 0;
+int se_ejecuto_primer_proceso=0;
 
+pthread_mutex_t se_ejecuto_primer_proceso_mutex;
 pthread_mutex_t interrupcion_enviada_mutex;
 pthread_mutex_t procesos_en_memoria_mutex;
 pthread_mutex_t pid_mutex;
@@ -68,6 +70,7 @@ void planificador_largo_plazo(void* arg){
 }
 
 void planificador_corto_plazo(void* arg){
+	sleep(3);
 	struct planificador_struct *p;
 	p = (struct planificador_struct*) arg;
 	int conexion_interrupt = crear_conexion(p->logger , "CPU Interrup" , p->configuraciones->ip_cpu , p->configuraciones->puerto_cpu_interrupt);
@@ -85,32 +88,44 @@ void planificador_corto_plazo(void* arg){
 				t_queue* aux = queue_create();
 				float aux1,aux2;
 				int size = queue_size(p->colas->cola_ready);
+				int estimaciones[p->configuraciones->grado_multiprogramacion];
 				printf("La cola READY tiene %d procesos para ejecutar\n",size);
 				if(size > 1){
+					memset(estimaciones, 0, sizeof estimaciones);
 				for(int j = 0; j < size; j++){
 					t_pcb* elegido = queue_pop(p->colas->cola_ready);
-					for(int i = 0; i<(size-1); i++){
+					for(int i = 0; i < (size-1); i++){
 						printf("Entro al for por %d vez \n", i);
 
 						aux1 = elegido->alfa * elegido->rafaga_anterior + (1 - elegido->alfa) * elegido->estimacion_inicial;
 						t_pcb* pcb2 = queue_pop(p->colas->cola_ready);
 						aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_inicial;
 
-						if (aux2 > aux1){
-								printf("El pcb %d tiene mas pioridad %f que %d con pioridad %f\n",pcb2->pid,aux2,elegido->pid,aux1);
-								queue_push(aux,pcb2);}
-							
-						else {
-								printf("Un pcb %d tiene mas pioridad %f que %d con pioridad %f\n",elegido->pid,aux1,pcb2->pid,aux2);
+						if (aux1 == aux2){
+								printf("Por FIFO tiene mas pioridad %d que %d",elegido->pid,pcb2->pid);
+								estimaciones[i] = aux1;
 								queue_push(aux,elegido);
 								elegido = pcb2;
-								printf("El elegido pasa a ser %d\n", elegido->pid);
+						}
+						else if (aux2 < aux1){
+								printf("El pcb %d tiene peor estimacion %f que %d con estimacion %f\n",elegido->pid,aux1,pcb2->pid,aux2);
+								estimaciones[i] = aux2;
+								queue_push(aux,pcb2);
+								}
+							
+						else {
+								printf("Un pcb %d tiene peor estimacion %f que %d con estimacion %f\n",pcb2->pid,aux2,elegido->pid,aux1);
+								estimaciones[i] = aux1;
+								queue_push(aux,elegido);
+								elegido = pcb2;
 							}
 						}
 						queue_push(aux,elegido);
 						p->colas->cola_ready = aux;
 						}
 					}
+				asignar_estimaciones(estimaciones,p->colas->cola_ready);
+				memset(estimaciones, 0, sizeof estimaciones);
 				pthread_mutex_lock (&cola_ready_mutex);
 				t_pcb* pcb = queue_pop(p->colas->cola_ready);
 				pthread_mutex_unlock (&cola_ready_mutex);
@@ -134,7 +149,9 @@ void planificador_corto_plazo(void* arg){
 		pthread_mutex_lock (&interrupcion_enviada_mutex);
 		pthread_mutex_lock (&cola_exec_mutex);
 		pthread_mutex_lock (&cola_ready_mutex);
-		if (!queue_is_empty(p->colas->cola_ready) && !queue_is_empty(p->colas->cola_exec) && strcmp(p->configuraciones->algoritmo_planificacion,"SRT") == 0 && !interrupcion_enviada){
+		pthread_mutex_lock (&se_ejecuto_primer_proceso_mutex);
+		if (!queue_is_empty(p->colas->cola_ready) && !queue_is_empty(p->colas->cola_exec) && strcmp(p->configuraciones->algoritmo_planificacion,"SRT") == 0 && !interrupcion_enviada && se_ejecuto_primer_proceso){
+			pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
 			pthread_mutex_unlock (&cola_ready_mutex);
 			pthread_mutex_unlock (&cola_exec_mutex);
 			pthread_mutex_unlock (&interrupcion_enviada_mutex);
@@ -148,9 +165,25 @@ void planificador_corto_plazo(void* arg){
 			enviar_paquete(paquete,conexion_interrupt);
 			eliminar_paquete(paquete);
 		}
+		pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
 		pthread_mutex_unlock (&cola_ready_mutex);
 		pthread_mutex_unlock (&cola_exec_mutex);
 		pthread_mutex_unlock (&interrupcion_enviada_mutex);
+	}
+}
+
+void asignar_estimaciones(int estimaciones[],t_queue* aux){
+	t_queue* aux2 = queue_create();
+	int aux_size=queue_size(aux);
+	for(int i = aux_size; i < aux_size; i++){
+		t_pcb* pcb = queue_pop(aux);
+		pcb->estimacion_inicial = estimaciones[i];
+		printf("Estimacion de pid %d: %d \n",pcb->pid,pcb->estimacion_inicial);
+		queue_push(aux2,pcb);
+	}
+	for(int i = aux_size; i < aux_size; i++){
+		t_pcb* pcb = queue_pop(aux2);
+		queue_push(aux,pcb);
 	}
 }
 
@@ -290,9 +323,11 @@ void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logge
 	pcb->pc=pc;
 	pcb->estado=estado;
 	pcb->tiempo_bloqueo= tiempo_bloqueo;
-	pcb->rafaga_anterior= pcb->estimacion_inicial;
-	pcb->estimacion_inicial = rafaga_anterior;
+	pcb->rafaga_anterior= rafaga_anterior;
 	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
+	pthread_mutex_lock (&se_ejecuto_primer_proceso_mutex);
+	se_ejecuto_primer_proceso = 1;
+	pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
 	if(estado == BLOCKED ){
 			printf("El proceso %d pasa a la cola BLOCK\n",pcb->pid);
 			if (pcb->tiempo_bloqueo >= configuraciones->tiempo_max_bloqueado){

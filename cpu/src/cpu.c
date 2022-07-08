@@ -146,7 +146,7 @@ int atender_cliente(void* arg){
     			instruccion = ejecutar_instruccion(p->logger,pcb,p->configuraciones);
 				if (instruccion == NO_OP) contador++;
 				}
-				if(instruccion == EXIT) notificar_fin(p->logger,pcb,p->configuraciones);
+//				if(instruccion == EXIT) notificar_fin(p->logger,pcb,p->configuraciones);
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
 				pthread_mutex_unlock (&interrupcion_mutex);
