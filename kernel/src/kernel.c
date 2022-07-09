@@ -14,7 +14,9 @@ pthread_mutex_t pid_mutex;
 pthread_mutex_t conexion_a_memoria_mutex;
 pthread_mutex_t cola_exec_mutex;
 pthread_mutex_t cola_ready_mutex;
-
+pthread_mutex_t cola_blocked_mutex;
+pthread_mutex_t cola_ready_suspended_mutex;
+pthread_mutex_t cola_ready_blocked_mutex;
 
 //Semaforos de while 1 con condicional
 sem_t planificador_largo_mutex_binario;
@@ -233,27 +235,106 @@ void enviar_pcb(void* arg){
 	actualizar_pcb(buffer,p->configuraciones,p->logger,p->colas);
 }
 
+void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger,t_colas_struct* colas){
+	log_info(logger,"Decodificando paquete\n");
+	int pc = leer_entero(buffer,0);
+	int estado = leer_entero(buffer,1);
+	int tiempo_bloqueo = leer_entero(buffer,2);
+	int rafaga_anterior = leer_entero(buffer,3);
+	log_info(logger,"Decodificacion finalizada\n");
+	t_pcb* pcb = queue_pop(colas->cola_exec);
+	pcb->pc=pc;
+	pcb->estado=estado;
+	pcb->tiempo_bloqueo= tiempo_bloqueo;
+	pcb->rafaga_anterior= rafaga_anterior;
+	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
+	pthread_mutex_lock (&se_ejecuto_primer_proceso_mutex);
+	se_ejecuto_primer_proceso = 1;
+	pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
+	if(estado == BLOCKED ){
+			printf("El proceso %d pasa a la cola BLOCK\n",pcb->pid);
+			pthread_mutex_lock (&cola_blocked_mutex);
+			queue_push(colas->cola_blocked,pcb);
+			pthread_mutex_unlock (&cola_blocked_mutex);
+			sem_post (&planificador_mediano_mutex_binario);
+	}
+	else if (estado == RUNNING){ // Volvió por una interrupción, entonces hay que meterlo de nuevo a Ready
+		pcb->estado= READY;
+		pthread_mutex_lock (&cola_ready_mutex);
+		queue_push(colas->cola_ready,pcb);
+		pthread_mutex_unlock (&cola_ready_mutex);
+		sem_post (&planificador_corto_binario);
+	}
+	else if (estado == TERMINATED){
+		log_info(logger, "El proceso %d terminó", pcb->pid);
+		pthread_mutex_lock (&procesos_en_memoria_mutex);
+		printf("El proceso %d terminó y la cantidad de procesos en memoria ahora es %d\n", pcb->pid,--procesos_en_memoria);
+		pthread_mutex_unlock (&procesos_en_memoria_mutex);
+		sem_post (&planificador_largo_mutex_binario);
+		sem_post (&planificador_corto_binario);
+	}
+}
+
+void bloquear_proceso(void* arg){
+	struct hilo_struct_standard_con_pcb *p;
+	p = (struct t_hilo_struct_standard_con_pcb*) arg;
+	usleep(p->pcb->tiempo_bloqueo * 1000);
+	printf("El proceso %d sale de la cola BLOCK\n",p->pcb->pid);
+	pthread_mutex_lock (&cola_ready_mutex);
+	queue_push(p->colas->cola_ready,p->pcb);
+	pthread_mutex_unlock (&cola_ready_mutex);
+	sem_post (&planificador_largo_mutex_binario);
+	sem_post (&planificador_corto_binario);
+}
+
 void planificador_mediano_plazo(void* arg){
 	struct planificador_struct *p;
 	p = (struct planificador_struct*) arg;
 	printf("Arrancó planificador de mediano plazo \n");
+	t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
+	hilo->logger = p->logger;
+	hilo->configuraciones = p->configuraciones;
+	hilo->colas = p->colas;
 	while(1){
 		sem_wait (&planificador_mediano_mutex_binario);
-		if(!queue_is_empty(p->colas->cola_suspended) && !hay_proceso_bloqueado){
-			pthread_mutex_lock (&hay_proceso_bloqueado_mutex);
-			hay_proceso_bloqueado = 1;
+		pthread_mutex_lock (&hay_proceso_bloqueado_mutex);
+		if(!queue_is_empty(p->colas->cola_blocked)){
 			pthread_mutex_unlock (&hay_proceso_bloqueado_mutex);
-			printf("Ingresó un proceso a la cola de suspendidos \n");
-			t_pcb* pcb = queue_pop(p->colas->cola_suspended);
-			t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
-			hilo->logger = p->logger;
-			hilo->configuraciones = p->configuraciones;
-			hilo->colas = p->colas;
+			printf("Ingresó un proceso a la cola de bloqueados \n");
+			t_pcb* pcb = queue_pop(p->colas->cola_blocked);
 			hilo->pcb = pcb;
-			pthread_t hilo_a_memoria;
-			pthread_create (&hilo_a_memoria, NULL , (void*) mandar_y_recibir_confirmacion,(void*) hilo);
-			pthread_detach(hilo_a_memoria);
+			if (pcb->tiempo_bloqueo >= p->configuraciones->tiempo_max_bloqueado && queue_is_empty(p->colas->cola_blocked_suspended)){
+				printf("El proceso %d pasa a la cola SUSPENDED-BLOCK\n",pcb->pid);
+				pthread_t hilo_a_memoria;
+				pthread_create (&hilo_a_memoria, NULL , (void*) mandar_y_recibir_confirmacion,(void*) hilo);
+				pthread_detach(hilo_a_memoria);
+				sem_post (&planificador_largo_mutex_binario);
+				sem_post (&planificador_corto_binario);
+				
+			}
+			else{
+				pthread_t hilo_a_memoria;
+				pthread_create (&hilo_a_memoria, NULL , (void*) bloquear_proceso,(void*) hilo);
+				pthread_detach(hilo_a_memoria);
+				sem_post (&planificador_corto_binario);
+			}
 		}
+		pthread_mutex_unlock (&hay_proceso_bloqueado_mutex);
+		if(!queue_is_empty(p->colas->cola_ready_suspended)){
+			if (procesos_en_memoria<=p->configuraciones->grado_multiprogramacion){
+				t_pcb* pcb = queue_pop(p->colas->cola_ready_suspended);
+				pthread_mutex_unlock (&procesos_en_memoria_mutex);
+				printf("Sale de la cola READY SUSPENDED a READY\n");
+				pthread_mutex_lock (&cola_ready_mutex);
+				queue_push(p->colas->cola_ready,pcb);
+				pthread_mutex_unlock (&cola_ready_mutex);
+				sem_post (&planificador_corto_binario);	
+				pthread_mutex_lock (&interrupcion_enviada_mutex);
+				interrupcion_enviada = 0;
+				pthread_mutex_unlock (&interrupcion_enviada_mutex);
+			}
+		}
+		sem_post (&planificador_largo_mutex_binario);
 	}
 }
 
@@ -296,8 +377,8 @@ int mandar_y_recibir_confirmacion(void* arg){
 		pthread_mutex_unlock (&interrupcion_enviada_mutex);
 	}else{
 		pthread_mutex_unlock (&procesos_en_memoria_mutex);
-		printf("Lo añade a la cola de NEW\n");
-		queue_push(p->colas->cola_new,pcb);
+		printf("Lo añade a la cola de READY SUSPENDED\n");
+		queue_push(p->colas->cola_ready_suspended,pcb);
 		sem_post (&planificador_largo_mutex_binario);
 		pthread_mutex_lock (&interrupcion_enviada_mutex);
 		interrupcion_enviada = 0;
@@ -312,11 +393,15 @@ t_colas_struct* crear_colas(){
 	t_queue* cola_new = queue_create();
 	t_queue* cola_ready = queue_create();
 	t_queue* cola_exec = queue_create();
-	t_queue* cola_suspended = queue_create();
+	t_queue* cola_blocked = queue_create();
+	t_queue* cola_ready_suspended = queue_create();
+	t_queue* cola_blocked_suspended = queue_create();
 	colas->cola_new = cola_new;
 	colas->cola_ready = cola_ready;
 	colas->cola_exec = cola_exec;
-	colas->cola_suspended = cola_suspended;
+	colas->cola_blocked = cola_blocked;
+	colas->cola_ready_suspended = cola_ready_suspended;
+	colas->cola_blocked_suspended = cola_blocked_suspended;
 	return colas;
 }
 
@@ -334,64 +419,11 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
 	pthread_t hilo_planificador_mediano_plazo;
     pthread_create (&hilo_planificador_mediano_plazo, NULL , (void*) planificador_mediano_plazo,(void*) planificador);
     pthread_detach(hilo_planificador_mediano_plazo);
+	pthread_t hilo_bloquear_proceso;
+    pthread_create (&hilo_bloquear_proceso, NULL , (void*) planificador_mediano_plazo,(void*) planificador);
+    pthread_detach(hilo_bloquear_proceso);
 }
 
-
-
-void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger,t_colas_struct* colas){
-	log_info(logger,"Decodificando paquete\n");
-	int pc = leer_entero(buffer,0);
-	int estado = leer_entero(buffer,1);
-	int tiempo_bloqueo = leer_entero(buffer,2);
-	int rafaga_anterior = leer_entero(buffer,3);
-	log_info(logger,"Decodificacion finalizada\n");
-	t_pcb* pcb = queue_pop(colas->cola_exec);
-	pcb->pc=pc;
-	pcb->estado=estado;
-	pcb->tiempo_bloqueo= tiempo_bloqueo;
-	pcb->rafaga_anterior= rafaga_anterior;
-	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
-	pthread_mutex_lock (&se_ejecuto_primer_proceso_mutex);
-	se_ejecuto_primer_proceso = 1;
-	pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
-	if(estado == BLOCKED ){
-			printf("El proceso %d pasa a la cola BLOCK\n",pcb->pid);
-			if (pcb->tiempo_bloqueo >= configuraciones->tiempo_max_bloqueado){
-				printf("El proceso %d pasa a la cola SUSPENDED-BLOCK\n",pcb->pid);
-				queue_push(colas->cola_suspended,pcb);
-				sem_post (&planificador_mediano_mutex_binario);
-				sem_post (&planificador_largo_mutex_binario);
-				sem_post (&planificador_corto_binario);
-				
-			}
-			else{
-				sem_post (&planificador_largo_mutex_binario);
-				sem_post (&planificador_corto_binario);
-				usleep(pcb->tiempo_bloqueo * 1000);
-				printf("El proceso %d sale de la cola BLOCK\n",pcb->pid);
-				pthread_mutex_lock (&cola_ready_mutex);
-				queue_push(colas->cola_ready,pcb);
-				pthread_mutex_unlock (&cola_ready_mutex);
-				sem_post (&planificador_largo_mutex_binario);
-				sem_post (&planificador_corto_binario);
-			}
-		}
-	else if (estado == RUNNING){ // Volvió por una interrupción, entonces hay que meterlo de nuevo a Ready
-		pcb->estado= READY;
-		pthread_mutex_lock (&cola_ready_mutex);
-		queue_push(colas->cola_ready,pcb);
-		pthread_mutex_unlock (&cola_ready_mutex);
-		sem_post (&planificador_corto_binario);
-	}
-	else if (estado == TERMINATED){
-		log_info(logger, "El proceso %d terminó", pcb->pid);
-		pthread_mutex_lock (&procesos_en_memoria_mutex);
-		printf("El proceso %d terminó y la cantidad de procesos en memoria ahora es %d\n", pcb->pid,--procesos_en_memoria);
-		pthread_mutex_unlock (&procesos_en_memoria_mutex);
-		sem_post (&planificador_largo_mutex_binario);
-		sem_post (&planificador_corto_binario);
-	}
-}
 
 int atender_cliente(void* arg){
 	struct hilo_struct *p;

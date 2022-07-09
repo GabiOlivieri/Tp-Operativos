@@ -35,7 +35,9 @@ typedef struct colas_struct {
     t_queue* cola_new;
     t_queue* cola_ready;
     t_queue* cola_exec;
-    t_queue* cola_suspended;
+    t_queue* cola_blocked;
+    t_queue* cola_ready_suspended;
+    t_queue* cola_blocked_suspended;
 } t_colas_struct;
 
 typedef struct hilo_struct {
