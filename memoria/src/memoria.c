@@ -12,6 +12,11 @@ void* bitmap_memoria;
 t_list* tablas_primer_nivel;
 t_list* tablas_segundo_nivel;
 
+pthread_mutex_t escribir_en_memoria;
+pthread_mutex_t tabla_primer_nivel_mutex;
+pthread_mutex_t tabla_segundo_nivel_mutex;
+pthread_mutex_t tablas_segundo_nivel_mutex;
+pthread_mutex_t cola_procesos_a_inicializar_mutex;
 pthread_mutex_t tablas_primer_nivel_mutex;
 pthread_mutex_t tablas_segundo_nivel_mutex;
 pthread_mutex_t numeros_tablas_primer_nivel_mutex;
@@ -50,7 +55,7 @@ int main(int argc, char* argv[]) {
 
 
     int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
-    
+    setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	crear_modulo_swap(logger,configuraciones,cola_suspendidos);
 	hilo_para_kernel(logger,configuraciones,cola_procesos_a_crear);
 	manejar_conexion(logger,configuraciones,servidor,cola_suspendidos,cola_procesos_a_crear);
@@ -134,13 +139,17 @@ void hilo_a_kernel(void* arg){
 			sem_wait(&kernel_mutex_binario);
 			if(!queue_is_empty(p->cola)){
 			printf("Ingresó un nuevo proceso \n");
+			pthread_mutex_lock(&cola_procesos_a_inicializar_mutex);
 			t_pcb* pcb = queue_pop(p->cola);
+			pthread_mutex_unlock(&cola_procesos_a_inicializar_mutex);
 			if(pcb->size > p->configuraciones->tam_pagina * p->configuraciones->entradas_por_tabla * p->configuraciones->entradas_por_tabla ){
 					printf("El pcb recibido tiene tamaño más grande que el direccionamiento lógico del sistema\n");
 					free(pcb);
 					paquete = crear_paquete();
 					agregar_entero_a_paquete(paquete,-1);
+					pthread_mutex_lock (&socket_kernel_mutex);
 					enviar_paquete(paquete, socket_kernel);
+					pthread_mutex_unlock (&socket_kernel_mutex);
 			}
 			else{
 				char *pidchar = {'0' + pcb->pid, '\0' };
@@ -150,8 +159,12 @@ void hilo_a_kernel(void* arg){
 				paquete->codigo_operacion = ESTRUCTURAS_CREADAS;
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				iniciar_tablas(p->configuraciones,pcb->size);
+				pthread_mutex_lock(&numeros_tablas_primer_nivel_mutex);
 				agregar_entero_a_paquete(paquete,(numeros_tablas_primer_nivel - 1));
+				pthread_mutex_unlock(&numeros_tablas_primer_nivel_mutex);
+				pthread_mutex_lock (&socket_kernel_mutex);
 				enviar_paquete(paquete,socket_kernel);
+				pthread_mutex_unlock (&socket_kernel_mutex);
 				printf("Devuelvo el proceso %d a kernel", pcb->pid);
 			}
 			eliminar_paquete(paquete);
@@ -184,7 +197,9 @@ int atender_cliente(void* arg){
 				pid = leer_entero(buffer,0);
 				int nro_tabla_primer_nivel = leer_entero(buffer,1);
 				int entrada_tabla_primer_nivel = leer_entero(buffer,2);
+				pthread_mutex_lock(&tabla_primer_nivel_mutex);
 				t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
+				pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 				t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_get(tabla_primer_nivel,entrada_tabla_primer_nivel);
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
@@ -202,31 +217,43 @@ int atender_cliente(void* arg){
 				int nro_tabla_segundo_nivel = leer_entero(buffer,1);
 				int entrada_tabla_segundo_nivel = leer_entero(buffer,2);
 				operacion = leer_entero(buffer,3);
+				pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 				t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,nro_tabla_segundo_nivel);
+				pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 				t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel;
 				switch(operacion){
 					case READ:
 						if(frame_valido(tabla_segundo_nivel,entrada_tabla_segundo_nivel)){
 							printf("El frame está presente en memoria y va a contestarle a cpu \n");
+							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
+							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 							fila_tabla_segundo_nivel->u = 1;
 							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
 
 						}
 						else{
 							printf("El frame no está presente en memoria y va a contestarle a cpu con un 0 \n");
+							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
+							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 						}
 						break;
 					case WRITE:
 						if (!frame_valido(tabla_segundo_nivel,entrada_tabla_segundo_nivel)){
 							printf("El frame no está presente en memoria y voy a escribirlo \n");
+							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							fila_tabla_segundo_nivel = buscar_frame_libre(tabla_segundo_nivel,p->configuraciones);
+							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 						}else{
 							printf("El frame está presente en memoria y voy a usarlo \n");
+							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
+							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 							fila_tabla_segundo_nivel->u = 1;
+							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
+							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 						}
 						break;
 
@@ -258,10 +285,13 @@ int atender_cliente(void* arg){
 						break;
 					case WRITE:
 						valor = leer_entero(buffer,4);
+						pthread_mutex_lock(&escribir_en_memoria);
 						espacio_Contiguo_En_Memoria[marco+desplazamiento] = valor;
-
+						pthread_mutex_unlock(&escribir_en_memoria);
 				}
+				pthread_mutex_lock(&escribir_en_memoria);
 				agregar_entero_a_paquete(paquete,espacio_Contiguo_En_Memoria[marco+desplazamiento]);
+				pthread_mutex_unlock(&escribir_en_memoria);
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
@@ -285,7 +315,11 @@ int atender_cliente(void* arg){
 				printf("Me llegó un INICIAR_PROCESO\n");
        			buffer = recibir_buffer(&size, p->socket);
 				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
+				
+				pthread_mutex_lock(&cola_procesos_a_inicializar_mutex);
 				queue_push(p->cola_procesos_a_inicializar,pcb);
+				pthread_mutex_unlock(&cola_procesos_a_inicializar_mutex);
+
 				printf("kernel_mutex_binario unlock\n");
 				sem_post(&kernel_mutex_binario);
 
@@ -323,7 +357,9 @@ int atender_cliente(void* arg){
 }
 
 bool frame_valido(t_list* tabla_segundo_nivel,int marco_solicitado){
+	pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 	t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,marco_solicitado);
+	pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 	return fila_tabla_segundo_nivel->p != 0;
 }
 
@@ -404,18 +440,23 @@ int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
 					filas_tabla_segundo_nivel->p = 0;
 					filas_tabla_segundo_nivel->u = 0;
 					filas_tabla_segundo_nivel->m = 0;
+					pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 					list_add(tabla_paginas_segundo_nivel,filas_tabla_segundo_nivel);
+					pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 				}
 			printf("Creo pagina de segundo nivel \n");
 			tablas_necesarias--;		
 		}
+		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 		list_add(tablas_segundo_nivel,tabla_paginas_segundo_nivel);
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 		list_add(tabla_paginas_primer_nivel,filas_tabla_primer_nivel);
 	}
 	numeros_tablas_primer_nivel++; // Se que acá habría que poner un mutex, pero lo pones y tira un error que hace parecer al payaso de it como algo lindo
 	
+	pthread_mutex_lock(&tabla_primer_nivel_mutex);
 	list_add(tablas_primer_nivel,tabla_paginas_primer_nivel);
-	
+	pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 }
 
 

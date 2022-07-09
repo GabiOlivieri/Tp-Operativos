@@ -6,12 +6,14 @@ int interrupcion_enviada = 0;
 int se_ejecuto_primer_proceso=0;
 int hay_proceso_bloqueado=0;
 
+pthread_mutex_t levantar_socket_mutex;
 pthread_mutex_t se_ejecuto_primer_proceso_mutex;
 pthread_mutex_t interrupcion_enviada_mutex;
 pthread_mutex_t hay_proceso_bloqueado_mutex;
 pthread_mutex_t procesos_en_memoria_mutex;
 pthread_mutex_t pid_mutex;
 pthread_mutex_t conexion_a_memoria_mutex;
+pthread_mutex_t cola_new_mutex;
 pthread_mutex_t cola_exec_mutex;
 pthread_mutex_t cola_ready_mutex;
 pthread_mutex_t cola_blocked_mutex;
@@ -46,6 +48,7 @@ int main(int argc, char* argv[]) {
 	sem_init(&enviar_a_cpu_binario, 0, 1);
 
 	int servidor = iniciar_servidor(logger , "Kernel" , "127.0.0.1" , configuraciones->puerto_escucha);
+	setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	manejar_conexion(logger,configuraciones,servidor,colas);
 	liberar_memoria(logger,config,configuraciones,servidor);
 	free(colas);
@@ -449,8 +452,10 @@ int atender_cliente(void* arg){
 }
 
 void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_colas_struct* colas){
-   	while(1){
+	while(1){
+		pthread_mutex_lock(&levantar_socket_mutex);
         int client_socket = esperar_cliente(logger,"Kernel",socket);
+		pthread_mutex_unlock(&levantar_socket_mutex);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
 		hilo->logger = logger;
 		hilo->socket = client_socket;
@@ -503,7 +508,9 @@ void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configu
 		printf("El proceso %d tiene la entrada de tabla de primer nivel: %d\n",pcb->pid,entrada_tabla_primer_nivel);
 		printf("Se agrego un proceso a la cola NEW\n");
 		pcb->tabla_paginas = entrada_tabla_primer_nivel;
+		pthread_mutex_lock(&cola_new_mutex);
 		queue_push(cola_new,pcb);
+		pthread_mutex_unlock(&cola_new_mutex);
 		sem_post (&planificador_largo_mutex_binario);
 	}
 }

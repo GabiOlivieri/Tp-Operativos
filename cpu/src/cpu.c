@@ -21,7 +21,8 @@ int main(int argc, char* argv[]) {
 
 
     int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
-    manejar_interrupciones(logger,configuraciones);
+    setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+	manejar_interrupciones(logger,configuraciones);
 	manejar_conexion_kernel(logger,configuraciones,servidor);
     liberar_memoria(logger,config,configuraciones,servidor);
     return 0;
@@ -127,12 +128,6 @@ int atender_cliente(void* arg){
 	while (1){
 		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {
-    		case MENSAJE:
-    			recibir_mensaje(p->socket , p->logger);
-    			break;
-    		case PAQUETE:
-    			log_info(p->logger, "Me llegaron los siguientes valores:\n");
-    			break;
 
     		case INICIAR_PROCESO:
     			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
@@ -142,10 +137,13 @@ int atender_cliente(void* arg){
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
 				clock_t begin = clock();
+				pthread_mutex_lock (&interrupcion_mutex);
        			while (!interrupcion && instruccion != EXIT && instruccion != IO){
+				pthread_mutex_unlock (&interrupcion_mutex);
     			instruccion = ejecutar_instruccion(p->logger,pcb,p->configuraciones);
 				if (instruccion == NO_OP) contador++;
 				}
+				pthread_mutex_unlock (&interrupcion_mutex);
 //				if(instruccion == EXIT) notificar_fin(p->logger,pcb,p->configuraciones);
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
