@@ -4,9 +4,11 @@ int pid = 0;
 int procesos_en_memoria = 0;
 int interrupcion_enviada = 0;
 int se_ejecuto_primer_proceso=0;
+int hay_proceso_bloqueado=0;
 
 pthread_mutex_t se_ejecuto_primer_proceso_mutex;
 pthread_mutex_t interrupcion_enviada_mutex;
+pthread_mutex_t hay_proceso_bloqueado_mutex;
 pthread_mutex_t procesos_en_memoria_mutex;
 pthread_mutex_t pid_mutex;
 pthread_mutex_t conexion_a_memoria_mutex;
@@ -20,6 +22,7 @@ sem_t planificador_corto_binario;
 sem_t enviar_a_cpu_binario;
 sem_t planificador_mediano_mutex_binario;
 sem_t cliente_servidor;
+sem_t enviado_a_swap;
 
 
 
@@ -37,6 +40,7 @@ int main(int argc, char* argv[]) {
 	sem_init(&planificador_corto_binario, 0, 0);
 	sem_init(&planificador_mediano_mutex_binario, 0, 0);
 	sem_init(&cliente_servidor, 0, 1);
+	sem_init(&enviado_a_swap, 0, 1);
 	sem_init(&enviar_a_cpu_binario, 0, 1);
 
 	int servidor = iniciar_servidor(logger , "Kernel" , "127.0.0.1" , configuraciones->puerto_escucha);
@@ -220,7 +224,10 @@ void planificador_mediano_plazo(void* arg){
 	printf("Arrancó planificador de mediano plazo \n");
 	while(1){
 		sem_wait (&planificador_mediano_mutex_binario);
-		if(!queue_is_empty(p->colas->cola_suspended)){
+		if(!queue_is_empty(p->colas->cola_suspended) && !hay_proceso_bloqueado){
+			pthread_mutex_lock (&hay_proceso_bloqueado_mutex);
+			hay_proceso_bloqueado = 1;
+			pthread_mutex_unlock (&hay_proceso_bloqueado_mutex);
 			printf("Ingresó un proceso a la cola de suspendidos \n");
 			t_pcb* pcb = queue_pop(p->colas->cola_suspended);
 			t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
@@ -230,7 +237,7 @@ void planificador_mediano_plazo(void* arg){
 			hilo->pcb = pcb;
 			pthread_t hilo_a_memoria;
 			pthread_create (&hilo_a_memoria, NULL , (void*) mandar_y_recibir_confirmacion,(void*) hilo);
-			pthread_detach(hilo_a_memoria);  
+			pthread_detach(hilo_a_memoria);
 		}
 	}
 }
@@ -254,6 +261,10 @@ int mandar_y_recibir_confirmacion(void* arg){
 	int size;
 	char * buffer = recibir_buffer(&size, conexion);
 	printf("El proceso %d sale de la cola SUSPENDED-BLOCK\n",pcb->pid);
+	pthread_mutex_lock (&hay_proceso_bloqueado_mutex);
+	hay_proceso_bloqueado = 0;
+	pthread_mutex_unlock (&hay_proceso_bloqueado_mutex);
+	sem_post (&planificador_mediano_mutex_binario); 
 	pthread_mutex_lock (&procesos_en_memoria_mutex);
 	procesos_en_memoria++;
 	pthread_mutex_unlock (&procesos_en_memoria_mutex);

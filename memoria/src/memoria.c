@@ -18,6 +18,7 @@ pthread_mutex_t numeros_tablas_primer_nivel_mutex;
 pthread_mutex_t numeros_tablas_segundo_nivel_mutex;
 pthread_mutex_t socket_kernel_mutex;
 pthread_mutex_t socket_kernel_swap_mutex;
+pthread_mutex_t enviar_a_kernel_swap_mutex;
 
 //Semaforos de while 1 con condicional
 sem_t sem; // swap
@@ -96,19 +97,23 @@ void modulo_swap(void* arg){
 	struct hilo_struct_swap *p;
 	p = (struct hilo_struct_swap*) arg;
 	printf("Arrancó modulo SWAP \n");
+	t_queue* en_swap = queue_create();
 	while(1){
 			printf("swap_mutex_binario lock\n");
 
 			sem_wait(&sem);
-			if(!queue_is_empty(p->cola)){
+			if(!queue_is_empty(p->cola) && queue_is_empty(en_swap)){
 				printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
+				queue_push(en_swap,pcb);
 				pcb = bloquear_proceso(pcb,p->configuraciones);
 				t_paquete* paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				printf("El proceso se desbloquea y vuelve a kernel\n");
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				enviar_paquete(paquete,socket_kernel_swap);
+				queue_pop(en_swap);
+				sem_post(&sem);
 				eliminar_paquete(paquete);
 				printf("Terminó de devolver el paquete\n");
 			}
