@@ -88,6 +88,21 @@ void planificador_corto_plazo(void* arg){
 			if( strcmp(p->configuraciones->algoritmo_planificacion,"FIFO") == 0 ){
 				int size = queue_size(p->colas->cola_ready);
 				printf("La cola READY tiene %d procesos para ejecutar\n",size);
+				pthread_mutex_lock (&cola_ready_mutex);
+				t_pcb* pcb = queue_pop(p->colas->cola_ready);
+				pthread_mutex_unlock (&cola_ready_mutex);
+				pthread_mutex_lock (&cola_exec_mutex);
+				queue_push(p->colas->cola_exec,pcb);
+				pthread_mutex_unlock (&cola_exec_mutex);
+				printf("Se agrego un proceso a la cola EXEC\n");
+				t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
+				hilo->logger = p->logger;
+				hilo->configuraciones = p->configuraciones;
+				hilo->colas = p->colas;
+				hilo->pcb = pcb;
+				pthread_t hilo_a_cpu;
+				pthread_create (&hilo_a_cpu, NULL , (void*) enviar_pcb,(void*) hilo);
+				pthread_detach(hilo_a_cpu);
 			}else{
 				t_queue* aux = queue_create();
 				float aux1,aux2;
