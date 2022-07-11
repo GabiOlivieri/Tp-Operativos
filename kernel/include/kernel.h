@@ -38,7 +38,13 @@ typedef struct colas_struct {
     t_queue* cola_blocked;
     t_queue* cola_ready_suspended;
     t_queue* cola_blocked_suspended;
+    t_queue* cola_io;
 } t_colas_struct;
+
+typedef struct info_bloqueado{
+    t_pcb* pcb;
+    char *provieneDe;
+} t_info_bloqueado;
 
 typedef struct hilo_struct {
     int socket;

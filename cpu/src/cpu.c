@@ -133,17 +133,15 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
     			int instruccion=0;
     			int size;
-				int contador=0;
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
 				clock_t begin = clock();
 				pthread_mutex_lock (&interrupcion_mutex);
        			while (!interrupcion && instruccion != EXIT && instruccion != IO){
 				pthread_mutex_unlock (&interrupcion_mutex);
-    			instruccion = ejecutar_instruccion(p->logger,pcb,p->configuraciones);
-				if (instruccion == NO_OP) contador++;
+    			instruccion = ciclo_de_instruccion(p->logger,pcb,p->configuraciones);
 				}
-				pthread_mutex_unlock (&interrupcion_mutex);
+				pthread_mutex_lock (&interrupcion_mutex);
 //				if(instruccion == EXIT) notificar_fin(p->logger,pcb,p->configuraciones);
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
@@ -152,7 +150,6 @@ int atender_cliente(void* arg){
 				double rafaga = (double)(end - begin) / CLOCKS_PER_SEC;
 				printf("Hizo %f rafagas\n", rafaga * 1000000 );
 				pcb->rafaga_anterior= rafaga * 1000000;
-				//printf("Voy a devolver pcb\n");
        			devolver_pcb(pcb,p->logger,p->socket);
     			break;
 			
@@ -181,9 +178,11 @@ int notificar_fin(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
 	int pid = leer_entero(buffer,0);
 }
 
-int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
+int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
 		t_direccion direccion;
-		int x = list_get(pcb->lista_instrucciones,pcb->pc);
+		// fetch
+		int x = list_get(pcb->lista_instrucciones,pcb->pc); 
+		//decode
 		if (x==NO_OP) {
 			printf("Ejecuto un NO_OP\n");
 			usleep(configuraciones->retardo_NOOP * 1000);

@@ -23,13 +23,11 @@ pthread_mutex_t numeros_tablas_primer_nivel_mutex;
 pthread_mutex_t numeros_tablas_segundo_nivel_mutex;
 pthread_mutex_t socket_kernel_mutex;
 pthread_mutex_t socket_kernel_swap_mutex;
-pthread_mutex_t enviar_a_kernel_swap_mutex;
 
 //Semaforos de while 1 con condicional
 sem_t sem; // swap
 sem_t kernel_mutex_binario;
 
-sem_t cliente_servidor_kernel;
 
 
 
@@ -42,7 +40,6 @@ int main(int argc, char* argv[]) {
 
 	sem_init(&sem, 0, 0);
 	sem_init(&kernel_mutex_binario, 0, 0);
-	sem_init(&cliente_servidor_kernel, 0, 1);
 
 	espacio_Contiguo_En_Memoria[configuraciones->tam_memoria / configuraciones->tam_pagina];
 
@@ -111,20 +108,17 @@ void modulo_swap(void* arg){
 				printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
 				queue_push(en_swap,pcb);
-				pcb = bloquear_proceso(pcb,p->configuraciones);
+				//pcb = bloquear_proceso(pcb,p->configuraciones);
 				t_paquete* paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
-				printf("El proceso se desbloquea y vuelve a kernel\n");
+				printf("El proceso fue enviado a swap con exito, aviso a kernel\n");
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				enviar_paquete(paquete,socket_kernel_swap);
 				queue_pop(en_swap);
 				sem_post(&sem);
 				eliminar_paquete(paquete);
-				printf("Terminó de devolver el paquete\n");
 			}
-
 	}
-	printf("Termina hilo swap\n");
 }
 
 void hilo_a_kernel(void* arg){
@@ -320,7 +314,6 @@ int atender_cliente(void* arg){
 				queue_push(p->cola_procesos_a_inicializar,pcb);
 				pthread_mutex_unlock(&cola_procesos_a_inicializar_mutex);
 
-				printf("kernel_mutex_binario unlock\n");
 				sem_post(&kernel_mutex_binario);
 
 				break;
@@ -336,8 +329,6 @@ int atender_cliente(void* arg){
 				pcb_swap->pid = leer_entero(buffer_swap,0);
 				pcb_swap->tiempo_bloqueo = leer_entero(buffer_swap,1);
 				queue_push(p->cola_suspendidos,pcb_swap);
-				printf("swap_mutex_binario unlock\n");
-				printf("cantidad de procesos en swap %d \n",queue_size(p->cola_suspendidos));
 				sem_post(&sem);
     			break;
 

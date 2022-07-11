@@ -86,10 +86,10 @@ t_pcb* recibir_pcb(char* buffer);
 t_direccion mmu_traduccion(int dir_logica);
 
 /**
-* @NAME: ejecutar_instruccion
+* @NAME: ciclo_de_instruccion
 * @DESC: ejecuta la instrucción que está siendo apuntada por el PC
 */
-int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones);
+int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones);
 
 /**
 * @NAME: hay_interrupcion
