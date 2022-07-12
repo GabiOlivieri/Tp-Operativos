@@ -1,6 +1,6 @@
 #include<kernel.h>
 
-int pid = 10;
+int pid = 0;
 int procesos_en_memoria = 0;
 int interrupcion_enviada = 0;
 int se_ejecuto_primer_proceso=0;
@@ -62,9 +62,11 @@ void planificador_largo_plazo(void* arg){
 		if(!queue_is_empty(p->colas->cola_new) && procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
 			int size = queue_size(p->colas->cola_new);
 		//	printf("La cola NEW tiene %d procesos para planificar\n",size);
+			log_info(p->logger,"La cola NEW tiene %d procesos para planificar\n",size);
 			t_pcb* pcb = queue_pop(p->colas->cola_new);
 			pthread_mutex_lock (&cola_ready_mutex);
 			queue_push(p->colas->cola_ready,pcb);
+			iniciar_estructuras(p->logger,p->configuraciones,pcb);
 			pthread_mutex_unlock (&cola_ready_mutex);
 			pthread_mutex_lock (&interrupcion_enviada_mutex);
 			interrupcion_enviada = 0;
@@ -427,6 +429,47 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
     pthread_detach(hilo_bloquear_proceso);
 }
 
+void iniciar_estructuras(t_log* logger,t_configuraciones* configuraciones,t_pcb* pcb){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = INICIAR_PROCESO;
+//	printf("Mando estructuras a memoria\n");
+	int conexion = crear_conexion(logger , "Memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	int cantidad_enteros = list_size(pcb->lista_instrucciones);
+	agregar_entero_a_paquete(paquete,cantidad_enteros);
+	agregar_entero_a_paquete(paquete,pcb->size);
+	agregar_entero_a_paquete(paquete,pcb->pc);
+	agregar_entero_a_paquete(paquete,pcb->estimacion_inicial);
+	agregar_entero_a_paquete(paquete,pcb->alfa);
+	agregar_entero_a_paquete(paquete,pcb->estado);
+	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
+	agregar_entero_a_paquete(paquete,pcb->rafaga_anterior);
+	t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
+    while(list_iterator_has_next(iterator)){
+        int ins = list_iterator_next(iterator);
+        agregar_entero_a_paquete(paquete,ins);
+    }
+    list_iterator_destroy(iterator);
+	sem_wait(&cliente_servidor);
+	enviar_paquete(paquete,conexion);
+	eliminar_paquete(paquete);
+	int codigoOperacion = recibir_operacion(conexion);
+	sem_post(&cliente_servidor);
+	int size;
+	char* buffer = recibir_buffer(&size, conexion);
+	if(leer_entero(buffer,0) < 0){
+		printf("Falló al iniciar pcb\n");
+		free(pcb);
+	}
+	else{
+		int entrada_tabla_primer_nivel = leer_entero(buffer,1);
+	//	printf("Termine de recibirlo\n");
+	//	printf("El proceso %d tiene la entrada de tabla de primer nivel: %d\n",pcb->pid,entrada_tabla_primer_nivel);
+	//	printf("Se agrego un proceso a la cola NEW\n");
+		pcb->tabla_paginas = entrada_tabla_primer_nivel;
+	}
+}
+
 
 int atender_cliente(void* arg){
 	struct hilo_struct *p;
@@ -472,47 +515,10 @@ void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configu
    	char * buffer = recibir_buffer(&size, client_socket);
 	t_pcb* pcb  = crear_pcb(buffer,configuraciones,logger);
 	log_info(logger,"Se creo el PCB con Process Id: %d y Tamaño: %d\n",pcb->pid,pcb->size);
-	t_paquete* paquete = crear_paquete();
-	paquete->codigo_operacion = INICIAR_PROCESO;
-//	printf("Mando estructuras a memoria\n");
-	int conexion = crear_conexion(logger , "Memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
-	agregar_entero_a_paquete(paquete,pcb->pid);
-	int cantidad_enteros = list_size(pcb->lista_instrucciones);
-	agregar_entero_a_paquete(paquete,cantidad_enteros);
-	agregar_entero_a_paquete(paquete,pcb->size);
-	agregar_entero_a_paquete(paquete,pcb->pc);
-	agregar_entero_a_paquete(paquete,pcb->estimacion_inicial);
-	agregar_entero_a_paquete(paquete,pcb->alfa);
-	agregar_entero_a_paquete(paquete,pcb->estado);
-	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
-	agregar_entero_a_paquete(paquete,pcb->rafaga_anterior);
-	t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
-    while(list_iterator_has_next(iterator)){
-        int ins = list_iterator_next(iterator);
-        agregar_entero_a_paquete(paquete,ins);
-    }
-    list_iterator_destroy(iterator);
-	sem_wait(&cliente_servidor);
-	enviar_paquete(paquete,conexion);
-	eliminar_paquete(paquete);
-	int codigoOperacion = recibir_operacion(conexion);
-	sem_post(&cliente_servidor);
-	buffer = recibir_buffer(&size, conexion);
-	if(leer_entero(buffer,0) < 0){
-		printf("Falló al iniciar pcb\n");
-		free(pcb);
-	}
-	else{
-		int entrada_tabla_primer_nivel = leer_entero(buffer,1);
-	//	printf("Termine de recibirlo\n");
-	//	printf("El proceso %d tiene la entrada de tabla de primer nivel: %d\n",pcb->pid,entrada_tabla_primer_nivel);
-	//	printf("Se agrego un proceso a la cola NEW\n");
-		pcb->tabla_paginas = entrada_tabla_primer_nivel;
-		pthread_mutex_lock(&cola_new_mutex);
-		queue_push(cola_new,pcb);
-		pthread_mutex_unlock(&cola_new_mutex);
-		sem_post (&planificador_largo_mutex_binario);
-	}
+	pthread_mutex_lock(&cola_new_mutex);
+	queue_push(cola_new,pcb);
+	pthread_mutex_unlock(&cola_new_mutex);
+	sem_post (&planificador_largo_mutex_binario);
 }
 
 t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){
