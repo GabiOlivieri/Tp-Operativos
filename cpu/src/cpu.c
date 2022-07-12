@@ -84,6 +84,7 @@ void cargar_en_TLB(t_list* tlb,int pagina,int marco,t_configuraciones* configura
 		while(list_iterator_has_next(iterator)){
 			t_fila_tlb* fila_tlb_iterator = list_iterator_next(iterator);
 			if (fila_tlb_iterator->pagina == -1 && fila_tlb_iterator->marco == -1){
+				printf("Cargo a la TLB \n");
 				list_replace(tlb,iterator->index,fila_tlb);
 				list_iterator_destroy(iterator);
 				return;
