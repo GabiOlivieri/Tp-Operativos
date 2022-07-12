@@ -125,7 +125,7 @@ void swap(t_pcb* pcb){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
 	while(list_iterator_has_next(iterator)){
     t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
-		if(fila_swap->pid==pid){
+		if(fila_swap->pid==pcb->pid){
 			t_list_iterator* iterator_swap = list_iterator_create(fila_swap->lista_datos);
 			// Abrir archivo swap
 			while(list_iterator_has_next(iterator_swap)){
@@ -163,7 +163,7 @@ void hilo_a_kernel(void* arg){
 				fp = archivo_de_swap(pidchar);
 				fclose(fp);
 
-				t_fila_tabla_swap* fila_swap = malloc(t_fila_tabla_swap);
+				/t_fila_tabla_swap* fila_swap = malloc(sizeof(t_fila_tabla_swap));
 				fila_swap->pid=pcb->pid;
 				fila_swap->lista_datos=list_create();
 				list_add(tabla_swap,fila_swap);
