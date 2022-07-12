@@ -90,11 +90,9 @@ void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, 
 }
 
 int atender_interrupcion(void* arg){
-	printf("Atendedor de interrupciones\n");
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;
 	while (1){
-		printf("Espero interrupcion\n");
 		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {		
     		case -1:
@@ -115,14 +113,13 @@ int atender_interrupcion(void* arg){
 
 void actualizar_interrupcion(t_log* logger){
 	    log_info(logger, "Me llego una interrupcion");
-       	printf("Me llego una interrupcion\n");
+    //   	printf("Me llego una interrupcion\n");
 		pthread_mutex_lock (&interrupcion_mutex);
 		interrupcion=1;
 		pthread_mutex_unlock (&interrupcion_mutex);
 }
 
 int atender_cliente(void* arg){
-	printf("Atendedor de clientes\n");
 	struct hilo_struct *p;
 	p = (struct hilo_struct*) arg;
 	while (1){
@@ -184,13 +181,11 @@ int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 		int x = list_get(pcb->lista_instrucciones,pcb->pc); 
 		//decode
 		if (x==NO_OP) {
-			printf("Ejecuto un NO_OP\n");
 			usleep(configuraciones->retardo_NOOP * 1000);
 		}
 		else if (x==IO){
 			pcb->pc++;
 			int y = list_get(pcb->lista_instrucciones,pcb->pc);
-			printf("Ejecuto un IO de argumento %d\n",y);
 			pcb->tiempo_bloqueo= y;
 			pcb->estado = BLOCKED;
 		}
@@ -213,7 +208,6 @@ int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			tercer_acesso_a_memoria_a_escribir(pcb,logger,configuraciones,marco,direccion.desplazamiento,x,atributo);
 		}
 		else if (x==EXIT) {
-			printf("Ejecuto un EXIT\n");
 			pcb->estado = TERMINATED;
 			return x;}
 		pcb->pc++;
@@ -315,7 +309,7 @@ void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = DEVOLVER_PROCESO;
     int cantidad_enteros = list_size(pcb->lista_instrucciones);
-    printf("Devuelvo proceso a Kernel\n");
+//    printf("Devuelvo proceso a Kernel\n");
     agregar_entero_a_paquete(paquete,pcb->pc);
     agregar_entero_a_paquete(paquete,pcb->estado);
 	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
@@ -341,7 +335,7 @@ t_pcb* recibir_pcb(char* buffer){
 	pcb->pid = leer_entero(buffer,0); //Variable global que se incrementa
 	pcb->pc = leer_entero(buffer,1);
 	pcb->tabla_paginas = leer_entero(buffer,3);
-	printf("El Process Id del pcb recibido es: %d y su Program Counter es: %d\n",pcb->pid,pcb->pc);
+//	printf("El Process Id del pcb recibido es: %d y su Program Counter es: %d\n",pcb->pid,pcb->pc);
 	pcb->estado = RUNNING;
 	pcb->tiempo_bloqueo = 0;
 	pcb->lista_instrucciones = obtener_lista_instrucciones(buffer,pcb);
@@ -354,40 +348,33 @@ t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb){
 	t_list* lista = list_create();
 			int aux = 4;
 			int cantidad_enteros = 4 + leer_entero(buffer,2);
-			printf("La lista de instrucciones contiene: \n");
 			for(; aux <= cantidad_enteros;aux++){
 				int x = leer_entero(buffer,aux);
 				void* id = malloc(sizeof(int));
 				id = (void*)(&x);
 				if(x==NO_OP){
-					printf("NO_OP\n");
 					list_add(lista,0);
 				}else if(x==IO){
 					list_add(lista,1);
 					aux++;
 					int y = leer_entero(buffer,aux);
-					printf("IO %d \n",y);
 					list_add(lista,y);
 				}else if(x==READ){
-					printf("Me llego un %d por lo que es un READ\n",x);
 					list_add(lista,2);
 					aux++;
 					int y = leer_entero(buffer,aux);
 					printf("READ %d \n",y);
 					list_add(lista,y);
 				}else if(x==WRITE){
-					printf("Me llego un %d por lo que es un WRITE\n",x);
 					list_add(lista,3);
 					aux++;
 					int y = leer_entero(buffer,aux);
-					printf("Me llego un parametro: %d \n",y);
 					list_add(lista,y);
 					aux++;
 					int z = leer_entero(buffer,aux);
 					printf("WRITE %d %d \n",y,z);
 					list_add(lista,z);
 				}else if(x==COPY){
-					printf("Me llego un %d por lo que es un COPY\n",x);
 					list_add(lista,4);
 					aux++;
 					int y = leer_entero(buffer,aux);

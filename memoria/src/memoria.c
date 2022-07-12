@@ -98,20 +98,17 @@ void hilo_para_kernel(t_log* logger, t_configuraciones* configuraciones,t_queue*
 void modulo_swap(void* arg){
 	struct hilo_struct_swap *p;
 	p = (struct hilo_struct_swap*) arg;
-	printf("Arrancó modulo SWAP \n");
 	t_queue* en_swap = queue_create();
 	while(1){
-			printf("swap_mutex_binario lock\n");
 
 			sem_wait(&sem);
 			if(!queue_is_empty(p->cola) && queue_is_empty(en_swap)){
-				printf("Ingresó un proceso a la cola de suspendidos \n");
+			//	printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
 				queue_push(en_swap,pcb);
 				//pcb = bloquear_proceso(pcb,p->configuraciones);
 				t_paquete* paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
-				printf("El proceso fue enviado a swap con exito, aviso a kernel\n");
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				enviar_paquete(paquete,socket_kernel_swap);
 				queue_pop(en_swap);
@@ -124,15 +121,13 @@ void modulo_swap(void* arg){
 void hilo_a_kernel(void* arg){
 	struct hilo_struct_kernel *p;
 	p = (struct hilo_struct_kernel*) arg;
-	printf("Arrancó hilo para kernel \n");
 	FILE *fp;
 	t_paquete* paquete;
 	while(1){
-			printf("kernel_mutex_binario lock\n");
 
 			sem_wait(&kernel_mutex_binario);
 			if(!queue_is_empty(p->cola)){
-			printf("Ingresó un nuevo proceso \n");
+	//		printf("Ingresó un nuevo proceso \n");
 			pthread_mutex_lock(&cola_procesos_a_inicializar_mutex);
 			t_pcb* pcb = queue_pop(p->cola);
 			pthread_mutex_unlock(&cola_procesos_a_inicializar_mutex);
@@ -159,7 +154,7 @@ void hilo_a_kernel(void* arg){
 				pthread_mutex_lock (&socket_kernel_mutex);
 				enviar_paquete(paquete,socket_kernel);
 				pthread_mutex_unlock (&socket_kernel_mutex);
-				printf("Devuelvo el proceso %d a kernel", pcb->pid);
+			//	printf("Devuelvo el proceso %d a kernel", pcb->pid);
 			}
 			eliminar_paquete(paquete);
 		}
@@ -186,7 +181,7 @@ int atender_cliente(void* arg){
     			break;
 
 			case PRIMER_ACCESO_A_MEMORIA:
-				printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
+			//	printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				int nro_tabla_primer_nivel = leer_entero(buffer,1);
@@ -205,7 +200,7 @@ int atender_cliente(void* arg){
 				break;
 
 			case SEGUNDO_ACCESSO_A_MEMORIA:
-				printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
+			//	printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				int nro_tabla_segundo_nivel = leer_entero(buffer,1);
@@ -262,13 +257,13 @@ int atender_cliente(void* arg){
 				break;
 			
 			case TERCER_ACCESSO_A_MEMORIA:
-				printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
+			//	printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				int marco = leer_entero(buffer,1);
 				int desplazamiento = leer_entero(buffer,2);
 				operacion = leer_entero(buffer,3);
-				int valor;
+				uint32_t valor;
 				if (marco + desplazamiento > p->configuraciones->tam_memoria / p->configuraciones->tam_pagina)
 					printf("La posición a la que busca acceder no existe\n");
 				paquete = crear_paquete();
@@ -292,7 +287,7 @@ int atender_cliente(void* arg){
 				break;
 
 			case HANDSHAKE:
-				printf("Recibí un HANDSHAKE\n");
+			//	printf("Recibí un HANDSHAKE\n");
     			paquete = crear_paquete();
     			paquete->codigo_operacion = HANDSHAKE;
 				agregar_entero_a_paquete(paquete,p->configuraciones->entradas_por_tabla);
@@ -306,7 +301,6 @@ int atender_cliente(void* arg){
 				pthread_mutex_lock (&socket_kernel_mutex);
 				socket_kernel = p->socket;
 				pthread_mutex_unlock (&socket_kernel_mutex);
-				printf("Me llegó un INICIAR_PROCESO\n");
        			buffer = recibir_buffer(&size, p->socket);
 				t_pcb* pcb = recibir_pcb(buffer,p->configuraciones);
 				
@@ -323,7 +317,6 @@ int atender_cliente(void* arg){
 				socket_kernel_swap = p->socket;
 				pthread_mutex_unlock (&socket_kernel_swap_mutex);
     			log_info(p->logger, "Me llego un ENVIAR_A_SWAP\n");
-				printf("Me llego un ENVIAR_A_SWAP\n");
        			char * buffer_swap = recibir_buffer(&size, p->socket);
 				t_pcb* pcb_swap = malloc(sizeof(t_pcb));
 				pcb_swap->pid = leer_entero(buffer_swap,0);
@@ -454,7 +447,6 @@ int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
 void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = DEVOLVER_PROCESO;
-    printf("El proceso se desbloquea y vuelve a kernel\n");
     agregar_entero_a_paquete(paquete,pcb->pid);
     enviar_paquete(paquete,socket);
     eliminar_paquete(paquete);
@@ -510,16 +502,9 @@ t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
 		}
 	}
 	pcb->lista_instrucciones = lista;
-	printf("El Process Id del pcb recibido es: %d y tamaño %d\n",pcb->pid,pcb->size);
+	//printf("El Process Id del pcb recibido es: %d y tamaño %d\n",pcb->pid,pcb->size);
 	return pcb;
 }
-
-t_pcb* bloquear_proceso(t_pcb* pcb,t_configuraciones* configuraciones){
-	printf("El Process Id del pcb recibido es: %d y se va a quedar: %d \n",pcb->pid,pcb->tiempo_bloqueo);
-    usleep((pcb->tiempo_bloqueo * 1000) + (configuraciones->retardo_swap * 1000));
-	return pcb;
-}
-
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->puerto_escucha = config_get_string_value(config , "PUERTO_ESCUCHA");
