@@ -11,6 +11,7 @@ void* bitmap_memoria;
 
 t_list* tablas_primer_nivel;
 t_list* tablas_segundo_nivel;
+t_list* tabla_swap;
 
 pthread_mutex_t escribir_en_memoria;
 pthread_mutex_t tabla_primer_nivel_mutex;
@@ -46,6 +47,7 @@ int main(int argc, char* argv[]) {
 	// iniciar estructuras
 	tablas_primer_nivel = list_create();
 	tablas_segundo_nivel = list_create();
+	tabla_swap = list_create();
 	t_queue* cola_suspendidos = queue_create();
 	t_queue* cola_procesos_a_crear = queue_create();
 	init_memoria(configuraciones,logger);
@@ -121,28 +123,6 @@ void modulo_swap(void* arg){
 
 void swap(t_pcb* pcb){
 
-	pthread_mutex_lock(&tabla_primer_nivel_mutex);
-	t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,pcb->tabla_paginas);
-	pthread_mutex_unlock(&tabla_primer_nivel_mutex);
-	
-	t_list_iterator* iteratorPrimer = list_iterator_create(tabla_primer_nivel);
-	while(list_iterator_has_next(iteratorPrimer)){
-        t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_iterator_next(iteratorPrimer);
-
-		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
-		t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,fila_tabla_primer_nivel->nro_tabla);
-		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
-
-		t_list_iterator* iteratorSegundo = list_iterator_create(tabla_segundo_nivel);
-		while(list_iterator_has_next(iteratorSegundo)){
-       		t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iteratorSegundo);
-			if(fila_tabla_segundo_nivel-> marco != NULL){
-				
-			}
-		}
-
-	}
-
 }
 
 void hilo_a_kernel(void* arg){
@@ -171,6 +151,12 @@ void hilo_a_kernel(void* arg){
 				char *pidchar = {'0' + pcb->pid, '\0' };
 				fp = archivo_de_swap(pidchar);
 				fclose(fp);
+
+				t_fila_tabla_swap* fila_swap = malloc(t_fila_tabla_swap);
+				fila_swap->pid=pcb->pid;
+				fila_swap->lista_datos=list_create();
+				list_add(tabla_swap,fila_swap);
+				
 				paquete = crear_paquete();
 				paquete->codigo_operacion = ESTRUCTURAS_CREADAS;
 				agregar_entero_a_paquete(paquete,pcb->pid);
