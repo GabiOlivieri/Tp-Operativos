@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
     setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	manejar_interrupciones(logger,configuraciones);
-	manejar_conexion_kernel(logger,configuraciones,servidor);
+	manejar_conexion_kernel(logger,configuraciones,servidor,tlb);
     liberar_memoria(logger,config,configuraciones,servidor);
     return 0;
 }
@@ -75,13 +75,14 @@ void manejar_interrupciones(t_log* logger, t_configuraciones* configuraciones){
     pthread_detach(hilo_servidor_atender_interrupcion); 
 }
 
-void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket){
+void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket,t_list* tlb){
 	while(1){
         int client_socket = esperar_cliente(logger , "CPU Dispatch" , socket);
 		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
 		hilo->logger = logger;
 		hilo->socket = client_socket;
 		hilo->configuraciones = configuraciones;
+		hilo->tlb = tlb;
         pthread_t hilo_servidor;
         pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
         pthread_detach(hilo_servidor);
@@ -136,11 +137,11 @@ int atender_cliente(void* arg){
 				pthread_mutex_lock (&interrupcion_mutex);
        			while (!interrupcion && instruccion != EXIT && instruccion != IO){
 				pthread_mutex_unlock (&interrupcion_mutex);
-    			instruccion = ciclo_de_instruccion(p->logger,pcb,p->configuraciones);
+    			instruccion = ciclo_de_instruccion(p->logger,pcb,p->configuraciones,p->tlb);
 				}
 				pthread_mutex_unlock (&interrupcion_mutex);
 				pthread_mutex_lock (&interrupcion_mutex);
-//				if(instruccion == EXIT) notificar_fin(p->logger,pcb,p->configuraciones);
+				if(instruccion == EXIT) notificar_fin(p->logger,pcb,p->configuraciones,p->tlb);
 				pthread_mutex_unlock (&interrupcion_mutex);
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
@@ -163,7 +164,7 @@ int atender_cliente(void* arg){
 	return EXIT_SUCCESS;	
 }
 
-int notificar_fin(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
+void notificar_fin(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones,t_list* tlb){
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = FINALIZAR_PROCESO;
@@ -172,13 +173,14 @@ int notificar_fin(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
+	limpiar_TLB(tlb);
 	int codigoOperacion = recibir_operacion(socket);
 	int size;
 	char * buffer = recibir_buffer(&size, socket);
 	int pid = leer_entero(buffer,0);
 }
 
-int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
+int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones,t_list* tlb){
 		t_direccion direccion;
 		// fetch
 		int x = list_get(pcb->lista_instrucciones,pcb->pc); 
@@ -215,13 +217,10 @@ int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			int direccion_logica_destino = list_get(pcb->lista_instrucciones,pcb->pc);
 			pcb->pc++;
 			int direccion_logica_origen = list_get(pcb->lista_instrucciones,pcb->pc);
-			t_direccion direccion_origen = mmu_traduccion(direccion_logica_origen);
-			int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion_origen.entrada_primer_nivel);
-			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion_origen.entrada_segundo_nivel,READ);
-			int valor = tercer_acesso_a_memoria(pcb,logger,configuraciones,marco,direccion_origen.desplazamiento,READ);
+			int valor = fetch_operands(direccion_logica_origen,pcb,logger,configuraciones,tlb);
 			direccion = mmu_traduccion(direccion_logica_destino);
-			nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
-			marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,WRITE);
+			int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
+			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,WRITE);
 			tercer_acesso_a_memoria_a_escribir(pcb,logger,configuraciones,marco,direccion.desplazamiento,WRITE,valor);
 		}
 		else if (x==EXIT) {
@@ -231,8 +230,12 @@ int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 		return x;
 }
 
-int fetch_operands(){
-
+int fetch_operands(int direccion_logica_origen,t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,t_list* tlb){
+	t_direccion direccion_origen = mmu_traduccion(direccion_logica_origen);
+	int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion_origen.entrada_primer_nivel);
+	int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion_origen.entrada_segundo_nivel,READ);
+	int valor = tercer_acesso_a_memoria(pcb,logger,configuraciones,marco,direccion_origen.desplazamiento,READ);
+	return valor;
 }
 
 t_direccion mmu_traduccion(int dir_logica){

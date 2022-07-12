@@ -32,6 +32,7 @@ typedef struct hilo_struct {
     int socket;
     t_log* logger;
     t_configuraciones* configuraciones;
+    t_list* tlb;
 } t_hilo_struct;
 
 typedef struct direccion {
@@ -89,7 +90,7 @@ t_direccion mmu_traduccion(int dir_logica);
 * @NAME: ciclo_de_instruccion
 * @DESC: ejecuta la instrucción que está siendo apuntada por el PC
 */
-int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones);
+int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones,t_list* tlb);
 
 /**
 * @NAME: hay_interrupcion
@@ -107,7 +108,8 @@ int atender_cliente(void* arg);
 */
 int atender_interrupcion(void* arg);
 
-void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket);
+void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket,t_list* tlb);
 
 t_list* crear_TLB(int cant_entradas);
+
 #endif

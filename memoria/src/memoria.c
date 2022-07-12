@@ -17,6 +17,7 @@ pthread_mutex_t tabla_primer_nivel_mutex;
 pthread_mutex_t tabla_segundo_nivel_mutex;
 pthread_mutex_t tablas_segundo_nivel_mutex;
 pthread_mutex_t cola_procesos_a_inicializar_mutex;
+pthread_mutex_t cola_suspendidos_mutex;
 pthread_mutex_t tablas_primer_nivel_mutex;
 pthread_mutex_t tablas_segundo_nivel_mutex;
 pthread_mutex_t numeros_tablas_primer_nivel_mutex;
@@ -102,7 +103,9 @@ void modulo_swap(void* arg){
 	while(1){
 
 			sem_wait(&sem);
+			pthread_mutex_lock(&cola_suspendidos_mutex);
 			if(!queue_is_empty(p->cola) && queue_is_empty(en_swap)){
+				pthread_mutex_unlock(&cola_suspendidos_mutex);
 			//	printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
 				queue_push(en_swap,pcb);
@@ -115,6 +118,7 @@ void modulo_swap(void* arg){
 				sem_post(&sem);
 				eliminar_paquete(paquete);
 			}
+			pthread_mutex_unlock(&cola_suspendidos_mutex);
 	}
 }
 
@@ -219,8 +223,9 @@ int atender_cliente(void* arg){
 							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
 							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 							fila_tabla_segundo_nivel->u = 1;
+							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
-
+							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 						}
 						else{
 							printf("El frame no está presente en memoria y va a contestarle a cpu con un 0 \n");
@@ -322,12 +327,21 @@ int atender_cliente(void* arg){
 				t_pcb* pcb_swap = malloc(sizeof(t_pcb));
 				pcb_swap->pid = leer_entero(buffer_swap,0);
 				pcb_swap->tiempo_bloqueo = leer_entero(buffer_swap,1);
+
+				pthread_mutex_lock(&cola_suspendidos_mutex);
 				queue_push(p->cola_suspendidos,pcb_swap);
+				pthread_mutex_unlock(&cola_suspendidos_mutex);
 				sem_post(&sem);
     			break;
 
 			case FINALIZAR_PROCESO:
-
+				buffer = recibir_buffer(&size, p->socket);
+				pid = leer_entero(buffer,0);
+				paquete = crear_paquete();
+    			paquete->codigo_operacion = FINALIZAR_PROCESO;
+				agregar_entero_a_paquete(paquete,pid);
+				enviar_paquete(paquete, p->socket);
+				eliminar_paquete(paquete);
 				break;
 			
     		case -1:
