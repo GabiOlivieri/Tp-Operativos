@@ -210,11 +210,29 @@ int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			int atributo = list_get(pcb->lista_instrucciones,pcb->pc);
 			tercer_acesso_a_memoria_a_escribir(pcb,logger,configuraciones,marco,direccion.desplazamiento,x,atributo);
 		}
+		else if (x==COPY){
+			pcb->pc++;
+			int direccion_logica_destino = list_get(pcb->lista_instrucciones,pcb->pc);
+			pcb->pc++;
+			int direccion_logica_origen = list_get(pcb->lista_instrucciones,pcb->pc);
+			t_direccion direccion_origen = mmu_traduccion(direccion_logica_origen);
+			int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion_origen.entrada_primer_nivel);
+			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion_origen.entrada_segundo_nivel,READ);
+			int valor = tercer_acesso_a_memoria(pcb,logger,configuraciones,marco,direccion_origen.desplazamiento,READ);
+			direccion = mmu_traduccion(direccion_logica_destino);
+			nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
+			marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,WRITE);
+			tercer_acesso_a_memoria_a_escribir(pcb,logger,configuraciones,marco,direccion.desplazamiento,WRITE,valor);
+		}
 		else if (x==EXIT) {
 			pcb->estado = TERMINATED;
 			return x;}
 		pcb->pc++;
 		return x;
+}
+
+int fetch_operands(){
+
 }
 
 t_direccion mmu_traduccion(int dir_logica){
@@ -269,7 +287,7 @@ int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configu
 	return marco;
 }
 
-void tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int marco, int desplazamiento,op_ins codigo_operacion){
+int tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int marco, int desplazamiento,op_ins codigo_operacion){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = TERCER_ACCESSO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
@@ -286,6 +304,7 @@ void tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configu
 	int pid = leer_entero(buffer,0);
 	int valor = leer_entero(buffer,1);
 	printf("La conexión fue exitosa y el pid %d leyó el valor: %d\n",pid,valor);
+	return valor;
 }
 
 void tercer_acesso_a_memoria_a_escribir(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,int marco, int desplazamiento,op_ins codigo_operacion,int valor){
