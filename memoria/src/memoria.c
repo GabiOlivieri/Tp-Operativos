@@ -169,6 +169,14 @@ void hilo_a_kernel(void* arg){
 				sprintf(pidchar, "%d", pcb->pid);
 				fp = archivo_de_swap(pidchar);
 				fclose(fp);
+				
+				t_fila_tabla_swap* fila_swap = malloc(sizeof(t_fila_tabla_swap));
+				fila_swap->pid=pcb->pid;
+				fila_swap->lista_datos=list_create();
+				pthread_mutex_lock(&tabla_swap_mutex);
+				list_add(tabla_swap,fila_swap);
+				pthread_mutex_unlock(&tabla_swap_mutex);
+
 				paquete = crear_paquete();
 				paquete->codigo_operacion = ESTRUCTURAS_CREADAS;
 				agregar_entero_a_paquete(paquete,pcb->pid);
