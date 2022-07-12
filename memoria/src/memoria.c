@@ -105,6 +105,7 @@ void modulo_swap(void* arg){
 			if(!queue_is_empty(p->cola) && queue_is_empty(en_swap)){
 			//	printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
+				swap(pcb);
 				queue_push(en_swap,pcb);
 				//pcb = bloquear_proceso(pcb,p->configuraciones);
 				t_paquete* paquete = crear_paquete();
@@ -116,6 +117,32 @@ void modulo_swap(void* arg){
 				eliminar_paquete(paquete);
 			}
 	}
+}
+
+void swap(t_pcb* pcb){
+
+	pthread_mutex_lock(&tabla_primer_nivel_mutex);
+	t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,pcb->tabla_paginas);
+	pthread_mutex_unlock(&tabla_primer_nivel_mutex);
+	
+	t_list_iterator* iteratorPrimer = list_iterator_create(tabla_primer_nivel);
+	while(list_iterator_has_next(iteratorPrimer)){
+        t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_iterator_next(iteratorPrimer);
+
+		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+		t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,fila_tabla_primer_nivel->nro_tabla);
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+
+		t_list_iterator* iteratorSegundo = list_iterator_create(tabla_segundo_nivel);
+		while(list_iterator_has_next(iteratorSegundo)){
+       		t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iteratorSegundo);
+			if(fila_tabla_segundo_nivel-> marco != NULL){
+				
+			}
+		}
+
+	}
+
 }
 
 void hilo_a_kernel(void* arg){
@@ -321,6 +348,7 @@ int atender_cliente(void* arg){
 				t_pcb* pcb_swap = malloc(sizeof(t_pcb));
 				pcb_swap->pid = leer_entero(buffer_swap,0);
 				pcb_swap->tiempo_bloqueo = leer_entero(buffer_swap,1);
+				pcb_swap->tabla_paginas = leer_entero(buffer_swap,2);
 				queue_push(p->cola_suspendidos,pcb_swap);
 				sem_post(&sem);
     			break;

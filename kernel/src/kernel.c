@@ -341,6 +341,7 @@ void planificador_mediano_plazo(void* arg){
 				int conexion = crear_conexion(p->logger , "Memoria" , p->configuraciones->ip_memoria ,p->configuraciones->puerto_memoria);
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
+				agregar_entero_a_paquete(paquete,pcb->tabla_paginas);
 				enviar_paquete(paquete,conexion);
 				pthread_mutex_lock (&procesos_en_memoria_mutex);
 				procesos_en_memoria--;
