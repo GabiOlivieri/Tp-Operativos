@@ -1,6 +1,6 @@
 #include<kernel.h>
 
-int pid = 0;
+int pid = 10;
 int procesos_en_memoria = 0;
 int interrupcion_enviada = 0;
 int se_ejecuto_primer_proceso=0;

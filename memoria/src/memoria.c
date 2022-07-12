@@ -141,7 +141,8 @@ void hilo_a_kernel(void* arg){
 					pthread_mutex_unlock (&socket_kernel_mutex);
 			}
 			else{
-				char *pidchar = {'0' + pcb->pid, '\0' };
+				char pidchar[5];
+				sprintf(pidchar, "%d", pcb->pid);
 				fp = archivo_de_swap(pidchar);
 				fclose(fp);
 				paquete = crear_paquete();
@@ -388,13 +389,13 @@ int asignar_pagina_de_memoria(){
 }
 
 
-FILE* archivo_de_swap(char *pid){
+FILE* archivo_de_swap(char pid[]){
 		const char* barra = "/";
 		const char* extension = ".swap";
 		char * path = malloc(256); 
 		path = strcpy(path, path_swap);	
 		strcat(path, barra);
-		strcat(path, &pid);
+		strcat(path, pid);
 		strcat(path, extension);
 		printf("%s\n", path);
 		return fopen(path, "w+");
