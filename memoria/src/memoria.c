@@ -11,6 +11,7 @@ void* bitmap_memoria;
 
 t_list* tablas_primer_nivel;
 t_list* tablas_segundo_nivel;
+t_list* tabla_swap;
 
 pthread_mutex_t escribir_en_memoria;
 pthread_mutex_t tabla_primer_nivel_mutex;
@@ -24,6 +25,7 @@ pthread_mutex_t numeros_tablas_primer_nivel_mutex;
 pthread_mutex_t numeros_tablas_segundo_nivel_mutex;
 pthread_mutex_t socket_kernel_mutex;
 pthread_mutex_t socket_kernel_swap_mutex;
+pthread_mutex_t tabla_swap_mutex;
 
 //Semaforos de while 1 con condicional
 sem_t sem; // swap
@@ -47,6 +49,7 @@ int main(int argc, char* argv[]) {
 	// iniciar estructuras
 	tablas_primer_nivel = list_create();
 	tablas_segundo_nivel = list_create();
+	tabla_swap = list_create();
 	t_queue* cola_suspendidos = queue_create();
 	t_queue* cola_procesos_a_crear = queue_create();
 	init_memoria(configuraciones,logger);
@@ -119,6 +122,23 @@ void modulo_swap(void* arg){
 				eliminar_paquete(paquete);
 			}
 			pthread_mutex_unlock(&cola_suspendidos_mutex);
+	}
+}
+
+void swap(t_pcb* pcb){
+	t_list_iterator* iterator = list_iterator_create(tabla_swap);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_lock(&tabla_swap_mutex);
+    	t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
+		pthread_mutex_unlock(&tabla_swap_mutex);
+		if(fila_swap->pid==pcb->pid){
+			t_list_iterator* iterator_swap = list_iterator_create(fila_swap->lista_datos);
+			// Abrir archivo swap
+			while(list_iterator_has_next(iterator_swap)){
+				t_escritura_swap* swap = list_iterator_next(iterator_swap);
+				//escribirlo
+			}
+		}
 	}
 }
 
@@ -283,6 +303,19 @@ int atender_cliente(void* arg){
 						pthread_mutex_lock(&escribir_en_memoria);
 						espacio_Contiguo_En_Memoria[marco+desplazamiento] = valor;
 						pthread_mutex_unlock(&escribir_en_memoria);
+						t_list_iterator* iterator = list_iterator_create(tabla_swap);
+						while(list_iterator_has_next(iterator)){
+        					pthread_mutex_lock(&tabla_swap_mutex);
+							t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
+							pthread_mutex_unlock(&tabla_swap_mutex);
+							if(fila_swap->pid==pid){
+								t_escritura_swap* swap = malloc(sizeof(t_escritura_swap));
+								swap->marco=marco;
+								swap->desplazamiento=desplazamiento;
+								swap->valor=valor;
+								list_add(fila_swap->lista_datos,swap);
+							}
+						}
 				}
 				pthread_mutex_lock(&escribir_en_memoria);
 				agregar_entero_a_paquete(paquete,espacio_Contiguo_En_Memoria[marco+desplazamiento]);

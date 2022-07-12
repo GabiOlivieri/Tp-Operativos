@@ -74,6 +74,17 @@ typedef struct fila_tabla_paginacion_2doNivel {
     bool m;
 } t_fila_tabla_paginacion_2doNivel;
 
+typedef struct fila_tabla_swap{
+    int pid;
+    t_list* lista_datos;
+} t_fila_tabla_swap;
+
+typedef struct escritura_swap{
+    int marco;
+    int desplazamiento;
+    uint32_t valor;
+} t_escritura_swap;
+
 /**
 * @NAME: crear_pcb
 * @DESC: lee los datos del paquete e interpreta las instrucciones para crear el pcb correspondiente
