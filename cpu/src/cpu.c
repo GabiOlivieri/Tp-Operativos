@@ -3,6 +3,7 @@
 int interrupcion=0;
 int cantidad_de_entradas_por_tabla_de_paginas=0;
 int tamano_de_pagina=0;
+t_log* logger_debug;
 
 pthread_mutex_t interrupcion_mutex;
 pthread_mutex_t peticion_memoria_mutex;
@@ -11,6 +12,7 @@ pthread_mutex_t peticion_memoria_mutex;
 
 int main(int argc, char* argv[]) {
     t_log* logger = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
+	logger_debug = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
     t_config* config = config_create("./cpu.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
@@ -18,6 +20,7 @@ int main(int argc, char* argv[]) {
 	handshake_memoria(logger,configuraciones);
 
 	t_list* tlb = crear_TLB(configuraciones->entradas_TLB);
+
 
 
     int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
@@ -46,8 +49,10 @@ t_list* crear_TLB(int cant_entradas){
 	t_list* tlb = list_create();
 	for(int i = 0; i < cant_entradas; i++){
 		t_fila_tlb* fila_tlb = malloc(sizeof(t_fila_tlb));
-		fila_tlb->pagina = NULL;
-		fila_tlb->marco = NULL;
+		fila_tlb->instante_de_ultima_referencia = NULL;
+		fila_tlb->instante_de_carga = NULL;
+		fila_tlb->pagina = -1;
+		fila_tlb->marco = -1;
 		list_add(tlb,fila_tlb);
 	}
 	return tlb;
@@ -57,10 +62,95 @@ void limpiar_TLB(t_list* tlb){
 	int limite = list_size(tlb);
 	for(int i = 0; i < limite ; i++){
 		t_fila_tlb* fila_tlb = list_get(tlb,i);
-		fila_tlb->pagina = NULL;
-		fila_tlb->marco = NULL;
+		fila_tlb->instante_de_ultima_referencia = NULL;
+		fila_tlb->instante_de_carga = NULL;
+		fila_tlb->pagina = -1;
+		fila_tlb->marco = -1;
 		list_replace(tlb,i,fila_tlb);
 	}
+}
+
+void cargar_en_TLB(t_list* tlb,int pagina,int marco,t_configuraciones* configuraciones){
+	t_fila_tlb* fila_tlb = malloc(sizeof(t_fila_tlb));
+	fila_tlb->instante_de_carga = time(NULL);
+	fila_tlb->instante_de_ultima_referencia = time(NULL);
+	fila_tlb->pagina = pagina;
+	fila_tlb->marco = marco;
+	if(!puede_cachear(tlb)){
+		reemplazar_entrada_tlb(tlb,fila_tlb,configuraciones);
+	}
+	else{
+		t_list_iterator* iterator = list_iterator_create(tlb);
+		while(list_iterator_has_next(iterator)){
+			t_fila_tlb* fila_tlb_iterator = list_iterator_next(iterator);
+			if (fila_tlb_iterator->pagina == -1 && fila_tlb_iterator->marco == -1){
+				list_replace(tlb,iterator->index,fila_tlb);
+				list_iterator_destroy(iterator);
+				return;
+			}
+		}
+		list_iterator_destroy(iterator);
+	}
+
+}
+
+int buscar_en_TLB(t_list* tlb, int pagina){
+	t_list_iterator* iterator = list_iterator_create(tlb);
+		while(list_iterator_has_next(iterator)){
+			t_fila_tlb* fila_tlb_iterator = list_iterator_next(iterator);
+			if (fila_tlb_iterator->pagina == pagina){
+				printf("Encontre la dirección en la TLB \n");
+				list_iterator_destroy(iterator);
+				return fila_tlb_iterator->marco;
+			}
+		}
+	list_iterator_destroy(iterator);	
+	return -1;
+}
+
+void reemplazar_entrada_tlb(t_list* tlb,t_fila_tlb* fila_tlb_a_reemplazar,t_configuraciones* configuraciones){
+	int index_elegido = 0;
+	t_fila_tlb* elegido =  list_get(tlb,0);
+	if (strcmp(configuraciones->reemplazo_TLB,"LRU") == 0){
+		t_list_iterator* iterator = list_iterator_create(tlb);
+    	while(list_iterator_has_next(iterator)){
+			t_fila_tlb* fila_tlb = list_iterator_next(iterator);
+			if (fila_tlb->instante_de_ultima_referencia < elegido->instante_de_ultima_referencia){
+				index_elegido = iterator->index;
+				elegido = fila_tlb;
+			}
+		}
+		list_iterator_destroy(iterator);
+	}
+	else
+	{
+		t_list_iterator* iterator = list_iterator_create(tlb);
+    	while(list_iterator_has_next(iterator)){
+			t_fila_tlb* fila_tlb = list_iterator_next(iterator);
+			if (fila_tlb->instante_de_carga < elegido->instante_de_carga){
+				index_elegido = iterator->index;
+				elegido = fila_tlb;
+			}
+		}
+		list_iterator_destroy(iterator);
+	}
+	printf("Reemplazo la pagina %d \n",index_elegido );
+	list_replace(tlb,index_elegido,fila_tlb_a_reemplazar);
+}
+
+
+bool puede_cachear(t_list* tlb){
+	int limite = list_size(tlb);
+	t_list_iterator* iterator = list_iterator_create(tlb);
+    while(list_iterator_has_next(iterator)){
+        t_fila_tlb* fila_tlb = list_iterator_next(iterator);
+        if (fila_tlb->pagina == -1 && fila_tlb->marco == -1){
+			list_iterator_destroy(iterator);
+			return true;
+		}
+    }
+    list_iterator_destroy(iterator);
+	return false;
 }
 
 void manejar_interrupciones(t_log* logger, t_configuraciones* configuraciones){
@@ -198,16 +288,24 @@ int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			pcb->pc++;
 			int direccion_logica = list_get(pcb->lista_instrucciones,pcb->pc);
 			direccion = mmu_traduccion(direccion_logica);
-			int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
-			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,x);
+			int marco = buscar_en_TLB(tlb,direccion.entrada_primer_nivel + direccion.entrada_segundo_nivel);
+			if (marco == -1){
+				int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
+				marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,x);
+				cargar_en_TLB(tlb,direccion.entrada_primer_nivel+direccion.entrada_segundo_nivel,marco,configuraciones);
+			}
 			tercer_acesso_a_memoria(pcb,logger,configuraciones,marco,direccion.desplazamiento,x);
 		}
 		else if (x==WRITE){
 			pcb->pc++;
 			int direccion_logica = list_get(pcb->lista_instrucciones,pcb->pc);
 			direccion = mmu_traduccion(direccion_logica);
-			int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
-			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,x);
+			int marco = buscar_en_TLB(tlb,direccion.entrada_primer_nivel + direccion.entrada_segundo_nivel);
+			if(marco == -1){
+				int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
+				marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,x);
+				cargar_en_TLB(tlb,direccion.entrada_primer_nivel+direccion.entrada_segundo_nivel,marco,configuraciones);
+			}
 			pcb->pc++;
 			int atributo = list_get(pcb->lista_instrucciones,pcb->pc);
 			tercer_acesso_a_memoria_a_escribir(pcb,logger,configuraciones,marco,direccion.desplazamiento,x,atributo);
@@ -219,8 +317,12 @@ int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 			int direccion_logica_origen = list_get(pcb->lista_instrucciones,pcb->pc);
 			int valor = fetch_operands(direccion_logica_origen,pcb,logger,configuraciones,tlb);
 			direccion = mmu_traduccion(direccion_logica_destino);
-			int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
-			int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,WRITE);
+			int marco = buscar_en_TLB(tlb,direccion.entrada_primer_nivel + direccion.entrada_segundo_nivel);
+			if(marco == -1){
+				int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion.entrada_primer_nivel);
+				marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion.entrada_segundo_nivel,WRITE);
+				cargar_en_TLB(tlb,direccion.entrada_primer_nivel+direccion.entrada_segundo_nivel,marco,configuraciones);
+			}
 			tercer_acesso_a_memoria_a_escribir(pcb,logger,configuraciones,marco,direccion.desplazamiento,WRITE,valor);
 		}
 		else if (x==EXIT) {
@@ -232,8 +334,12 @@ int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraci
 
 int fetch_operands(int direccion_logica_origen,t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones,t_list* tlb){
 	t_direccion direccion_origen = mmu_traduccion(direccion_logica_origen);
-	int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion_origen.entrada_primer_nivel);
-	int marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion_origen.entrada_segundo_nivel,READ);
+	int marco = buscar_en_TLB(tlb,direccion_origen.entrada_primer_nivel + direccion_origen.entrada_segundo_nivel);
+	if(marco == -1){
+		int nro_segunda_tabla = primer_acceso_a_memoria(pcb,logger,configuraciones,direccion_origen.entrada_primer_nivel);
+		marco = segundo_acesso_a_memoria(pcb,logger,configuraciones,nro_segunda_tabla,direccion_origen.entrada_segundo_nivel,READ);
+		cargar_en_TLB(tlb,direccion_origen.entrada_primer_nivel+direccion_origen.entrada_segundo_nivel,marco,configuraciones);
+	}
 	int valor = tercer_acesso_a_memoria(pcb,logger,configuraciones,marco,direccion_origen.desplazamiento,READ);
 	return valor;
 }
@@ -270,7 +376,7 @@ int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configur
 	return direccion_fisica_entrada_segunda_tabla;
 }
 
-int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones, int tabla_segundo_nivel,int entrada_segunda_tabla,op_ins codigo_operacion){
+int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones, int tabla_segundo_nivel,int entrada_segunda_tabla,op_ins codigo_operacion,t_list* tlb){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = SEGUNDO_ACCESSO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);

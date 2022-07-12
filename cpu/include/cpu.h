@@ -42,6 +42,8 @@ typedef struct direccion {
 } t_direccion;
 
 typedef struct tlb{
+    time_t  instante_de_carga;
+    time_t  instante_de_ultima_referencia;
     int pagina;
     int marco;
 } t_fila_tlb;
@@ -111,5 +113,7 @@ int atender_interrupcion(void* arg);
 void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket,t_list* tlb);
 
 t_list* crear_TLB(int cant_entradas);
+
+bool puede_cachear(t_list* tlb);
 
 #endif

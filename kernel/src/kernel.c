@@ -229,7 +229,7 @@ void enviar_pcb(void* arg){
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = INICIAR_PROCESO;
     int cantidad_enteros = list_size(p->pcb->lista_instrucciones);
-//    printf("El proceso %d es enviado a cpu\n",p->pcb->pid);
+    printf("El proceso %d es enviado a cpu\n",p->pcb->pid);
     agregar_entero_a_paquete(paquete,p->pcb->pid);
     agregar_entero_a_paquete(paquete,p->pcb->pc);
     agregar_entero_a_paquete(paquete,cantidad_enteros);
