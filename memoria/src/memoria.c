@@ -148,9 +148,9 @@ void hilo_a_kernel(void* arg){
 				paquete->codigo_operacion = ESTRUCTURAS_CREADAS;
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				iniciar_tablas(p->configuraciones,pcb->size);
-				pthread_mutex_lock(&numeros_tablas_primer_nivel_mutex);
+			//	pthread_mutex_lock(&numeros_tablas_primer_nivel_mutex);
 				agregar_entero_a_paquete(paquete,(numeros_tablas_primer_nivel - 1));
-				pthread_mutex_unlock(&numeros_tablas_primer_nivel_mutex);
+			//	pthread_mutex_unlock(&numeros_tablas_primer_nivel_mutex);
 				pthread_mutex_lock (&socket_kernel_mutex);
 				enviar_paquete(paquete,socket_kernel);
 				pthread_mutex_unlock (&socket_kernel_mutex);

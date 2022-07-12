@@ -138,8 +138,10 @@ int atender_cliente(void* arg){
 				pthread_mutex_unlock (&interrupcion_mutex);
     			instruccion = ciclo_de_instruccion(p->logger,pcb,p->configuraciones);
 				}
+				pthread_mutex_unlock (&interrupcion_mutex);
 				pthread_mutex_lock (&interrupcion_mutex);
 //				if(instruccion == EXIT) notificar_fin(p->logger,pcb,p->configuraciones);
+				pthread_mutex_unlock (&interrupcion_mutex);
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
 				pthread_mutex_unlock (&interrupcion_mutex);
@@ -166,6 +168,7 @@ int notificar_fin(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = FINALIZAR_PROCESO;
 	printf("Notifico fin de proceso \n" );
+	log_info(logger, "Fin de proceso\n");
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);

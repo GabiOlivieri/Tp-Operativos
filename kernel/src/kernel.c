@@ -70,6 +70,7 @@ void planificador_largo_plazo(void* arg){
 			interrupcion_enviada = 0;
 			pthread_mutex_unlock (&interrupcion_enviada_mutex);
 			pthread_mutex_lock (&procesos_en_memoria_mutex);
+			procesos_en_memoria++;
 		//	printf("Se agrego un proceso a la cola READY y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
 			pthread_mutex_unlock (&procesos_en_memoria_mutex);
 			sem_post (&planificador_corto_binario);
