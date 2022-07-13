@@ -8,6 +8,10 @@ t_log* logger_debug;
 pthread_mutex_t interrupcion_mutex;
 pthread_mutex_t peticion_memoria_mutex;
 pthread_mutex_t tlb_mutex;
+pthread_mutex_t tlb_marco_mutex;
+pthread_mutex_t tlb_ultima_referencia_mutex;
+pthread_mutex_t tlb_entrada_primer_nivel_mutex;
+pthread_mutex_t tlb_entrada_segundo_nivel_mutex;
 
 
 
@@ -65,12 +69,20 @@ t_list* crear_TLB(int cant_entradas){
 void limpiar_TLB(t_list* tlb){
 	int limite = list_size(tlb);
 	for(int i = 0; i < limite ; i++){
+		pthread_mutex_lock(&tlb_mutex);
 		t_fila_tlb* fila_tlb = list_get(tlb,i);
+		pthread_mutex_unlock(&tlb_mutex);
+		pthread_mutex_lock(&tlb_ultima_referencia_mutex);
 		fila_tlb->instante_de_ultima_referencia = NULL;
+		pthread_mutex_unlock(&tlb_ultima_referencia_mutex);
 		fila_tlb->instante_de_carga = NULL;
+		pthread_mutex_lock(&tlb_entrada_primer_nivel_mutex);
 		fila_tlb->pagina->entrada_primer_nivel=-1;
+		pthread_mutex_unlock(&tlb_entrada_primer_nivel_mutex);
 		fila_tlb->pagina->entrada_segundo_nivel=-1;
+		pthread_mutex_lock(&tlb_marco_mutex);
 		fila_tlb->marco = -1;
+		pthread_mutex_unlock(&tlb_marco_mutex);
 		pthread_mutex_lock(&tlb_mutex);
 		list_replace(tlb,i,fila_tlb);
 		pthread_mutex_unlock(&tlb_mutex);
@@ -93,7 +105,9 @@ void cargar_en_TLB(t_list* tlb,int pagina1,int pagina2,int marco,t_configuracion
 		t_list_iterator* iterator = list_iterator_create(tlb);
 		while(list_iterator_has_next(iterator)){
 			t_fila_tlb* fila_tlb_iterator = list_iterator_next(iterator);
+			pthread_mutex_lock(&tlb_marco_mutex);
 			if (fila_tlb_iterator->marco == -1){ // -1 significa que no está cargado en memoria
+				pthread_mutex_unlock(&tlb_marco_mutex);
 				printf("Cargo a la TLB \n");
 				pthread_mutex_lock(&tlb_mutex);
 				list_replace(tlb,iterator->index,fila_tlb);
@@ -101,6 +115,7 @@ void cargar_en_TLB(t_list* tlb,int pagina1,int pagina2,int marco,t_configuracion
 				list_iterator_destroy(iterator);
 				return;
 			}
+			pthread_mutex_unlock(&tlb_marco_mutex);
 		}
 		list_iterator_destroy(iterator);
 	}
@@ -110,16 +125,23 @@ void cargar_en_TLB(t_list* tlb,int pagina1,int pagina2,int marco,t_configuracion
 int buscar_en_TLB(t_list* tlb, int entrada1, int entrada2){
 	t_list_iterator* iterator = list_iterator_create(tlb);
 		while(list_iterator_has_next(iterator)){
+			pthread_mutex_lock(&tlb_mutex);
 			t_fila_tlb* fila_tlb_iterator = list_iterator_next(iterator);
+			pthread_mutex_unlock(&tlb_mutex);
+			pthread_mutex_lock(&tlb_entrada_primer_nivel_mutex);
 			if (fila_tlb_iterator->pagina->entrada_primer_nivel == entrada1 && fila_tlb_iterator->pagina->entrada_segundo_nivel == entrada2){
+			pthread_mutex_unlock(&tlb_entrada_primer_nivel_mutex);
 				printf("Encontre la dirección en la TLB \n");
+				pthread_mutex_lock(&tlb_ultima_referencia_mutex);
 				fila_tlb_iterator->instante_de_ultima_referencia = time(NULL);
+				pthread_mutex_unlock(&tlb_ultima_referencia_mutex);
 				pthread_mutex_lock(&tlb_mutex);
 				list_replace(tlb,iterator->index,fila_tlb_iterator);
 				pthread_mutex_unlock(&tlb_mutex);
 				list_iterator_destroy(iterator);
 				return fila_tlb_iterator->marco;
 			}
+			pthread_mutex_unlock(&tlb_entrada_primer_nivel_mutex);
 		}
 	list_iterator_destroy(iterator);	
 	return -1;
@@ -164,11 +186,16 @@ bool puede_cachear(t_list* tlb){
 	int limite = list_size(tlb);
 	t_list_iterator* iterator = list_iterator_create(tlb);
     while(list_iterator_has_next(iterator)){
+		pthread_mutex_lock(&tlb_mutex);
         t_fila_tlb* fila_tlb = list_iterator_next(iterator);
+		pthread_mutex_unlock(&tlb_mutex);
+		pthread_mutex_lock(&tlb_marco_mutex);
         if (fila_tlb->marco == -1){
+			pthread_mutex_unlock(&tlb_marco_mutex);
 			list_iterator_destroy(iterator);
 			return true;
 		}
+		pthread_mutex_unlock(&tlb_marco_mutex);
     }
     list_iterator_destroy(iterator);
 	return false;

@@ -323,7 +323,9 @@ int atender_cliente(void* arg){
 								swap->marco=marco;
 								swap->desplazamiento=desplazamiento;
 								swap->valor=valor;
+								pthread_mutex_lock(&tabla_swap_mutex);
 								list_add(fila_swap->lista_datos,swap);
+								pthread_mutex_unlock(&tabla_swap_mutex);
 							}
 						}
 				}
