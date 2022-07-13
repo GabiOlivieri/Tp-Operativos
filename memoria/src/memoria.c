@@ -117,7 +117,8 @@ void modulo_swap(void* arg){
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				enviar_paquete(paquete,socket_kernel_swap);
-				queue_pop(en_swap);
+				pcb = queue_pop(en_swap);
+				des_swap(pcb);
 				sem_post(&sem);
 				eliminar_paquete(paquete);
 			}
@@ -133,13 +134,51 @@ void swap(t_pcb* pcb){
 		pthread_mutex_unlock(&tabla_swap_mutex);
 		if(fila_swap->pid==pcb->pid){
 			t_list_iterator* iterator_swap = list_iterator_create(fila_swap->lista_datos);
-			// Abrir archivo swap
+			char pidchar[5];
+			sprintf(pidchar, "%d", pcb->pid);
+			FILE* fp = archivo_de_swap(pidchar,1);
 			while(list_iterator_has_next(iterator_swap)){
 				t_escritura_swap* swap = list_iterator_next(iterator_swap);
-				//escribirlo
+				fwrite(swap, sizeof(t_escritura_swap),1,fp);
+				pthread_mutex_lock(&escribir_en_memoria);
+				espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento] = NULL;
+				pthread_mutex_unlock(&escribir_en_memoria);
+			}
+			fclose(fp);
+		}
+	}
+}
+
+void des_swap(t_pcb* pcb){
+	char pidchar[5];
+	sprintf(pidchar, "%d", pcb->pid);
+	FILE* fp = archivo_de_swap(pidchar,0);
+	t_escritura_swap* swap = malloc(sizeof(t_escritura_swap));
+	size_t resultado;
+	while (!feof(fp)){
+   		 resultado = fread(swap, sizeof(t_escritura_swap), 1, fp);
+		if (resultado != 1){
+			break;
+		}
+		int escritura = 1;
+		while (escritura){
+			if(espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento]==NULL){
+				espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento]=swap->valor;
+				escritura = 0;
+			}
+			swap->desplazamiento++;
+		}
+		t_list_iterator* iterator = list_iterator_create(tabla_swap);
+		while(list_iterator_has_next(iterator)){
+			pthread_mutex_lock(&tabla_swap_mutex);
+			t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
+			pthread_mutex_unlock(&tabla_swap_mutex);
+			if(fila_swap->pid==pcb->pid){
+				list_add(fila_swap->lista_datos,swap);
 			}
 		}
 	}
+	fclose(fp);
 }
 
 void hilo_a_kernel(void* arg){
@@ -167,7 +206,7 @@ void hilo_a_kernel(void* arg){
 			else{
 				char pidchar[5];
 				sprintf(pidchar, "%d", pcb->pid);
-				fp = archivo_de_swap(pidchar);
+				fp = archivo_de_swap(pidchar,1);
 				fclose(fp);
 				
 				t_fila_tabla_swap* fila_swap = malloc(sizeof(t_fila_tabla_swap));
@@ -452,7 +491,7 @@ int asignar_pagina_de_memoria(){
 }
 
 
-FILE* archivo_de_swap(char pid[]){
+FILE* archivo_de_swap(char pid[],int modo){
 		const char* barra = "/";
 		const char* extension = ".swap";
 		char * path = malloc(256); 
@@ -461,7 +500,11 @@ FILE* archivo_de_swap(char pid[]){
 		strcat(path, pid);
 		strcat(path, extension);
 		printf("%s\n", path);
-		return fopen(path, "w+");
+		if(modo){
+			return fopen(path, "w+");
+		}else{
+			return fopen(path, "r");
+		}
 }
 
 int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
