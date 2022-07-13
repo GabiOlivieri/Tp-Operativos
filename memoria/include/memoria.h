@@ -178,7 +178,7 @@ t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
 
 char* my_itoa(int num);
 
-FILE* archivo_de_swap(char *pid);
+FILE* archivo_de_swap(char *pid, int modo);
 
 void modulo_swap(void* arg);
 
