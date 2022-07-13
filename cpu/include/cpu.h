@@ -41,10 +41,15 @@ typedef struct direccion {
     int desplazamiento;
 } t_direccion;
 
+typedef struct pagina{
+    int entrada_primer_nivel;
+    int entrada_segundo_nivel;
+} t_pagina;
+
 typedef struct tlb{
     time_t  instante_de_carga;
     time_t  instante_de_ultima_referencia;
-    int pagina;
+    t_pagina* pagina;
     int marco;
 } t_fila_tlb;
 

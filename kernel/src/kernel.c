@@ -482,6 +482,7 @@ int atender_cliente(void* arg){
 			break;
 		case INICIAR_PROCESO:
 			iniciar_proceso(p->logger,p->socket,p->configuraciones,p->colas->cola_new);
+			pthread_exit(NULL);
 			break;
 		case -1:
 			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");

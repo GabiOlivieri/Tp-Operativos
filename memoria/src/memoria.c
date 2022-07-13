@@ -230,6 +230,7 @@ int atender_cliente(void* arg){
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				pthread_exit(NULL);
 				break;
 
 			case SEGUNDO_ACCESSO_A_MEMORIA:
@@ -288,6 +289,7 @@ int atender_cliente(void* arg){
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				pthread_exit(NULL);
 				break;
 			
 			case TERCER_ACCESSO_A_MEMORIA:
@@ -331,6 +333,7 @@ int atender_cliente(void* arg){
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				pthread_exit(NULL);
 				break;
 
 			case HANDSHAKE:
@@ -341,6 +344,7 @@ int atender_cliente(void* arg){
 				agregar_entero_a_paquete(paquete,p->configuraciones->tam_pagina);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				pthread_exit(NULL);
     			break;
 
 			case INICIAR_PROCESO:
@@ -356,7 +360,7 @@ int atender_cliente(void* arg){
 				pthread_mutex_unlock(&cola_procesos_a_inicializar_mutex);
 
 				sem_post(&kernel_mutex_binario);
-
+				pthread_exit(NULL);
 				break;
 
     		case ENVIAR_A_SWAP:
@@ -373,6 +377,7 @@ int atender_cliente(void* arg){
 				queue_push(p->cola_suspendidos,pcb_swap);
 				pthread_mutex_unlock(&cola_suspendidos_mutex);
 				sem_post(&sem);
+				pthread_exit(NULL);
     			break;
 
 			case FINALIZAR_PROCESO:
@@ -383,6 +388,7 @@ int atender_cliente(void* arg){
 				agregar_entero_a_paquete(paquete,pid);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				pthread_exit(NULL);
 				break;
 			
     		case -1:
