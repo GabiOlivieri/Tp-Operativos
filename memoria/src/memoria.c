@@ -112,7 +112,7 @@ void modulo_swap(void* arg){
 			//	printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
 				queue_push(en_swap,pcb);
-				//pcb = bloquear_proceso(pcb,p->configuraciones);
+				swap(pcb);
 				t_paquete* paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pcb->pid);
@@ -128,7 +128,9 @@ void modulo_swap(void* arg){
 
 void swap(t_pcb* pcb){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
+	pthread_mutex_lock(&tabla_swap_mutex);
 	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tabla_swap_mutex);
 		pthread_mutex_lock(&tabla_swap_mutex);
     	t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
 		pthread_mutex_unlock(&tabla_swap_mutex);
@@ -143,10 +145,12 @@ void swap(t_pcb* pcb){
 				pthread_mutex_lock(&escribir_en_memoria);
 				espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento] = NULL;
 				pthread_mutex_unlock(&escribir_en_memoria);
+				bitarray_clean_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
 			}
 			fclose(fp);
 		}
 	}
+	pthread_mutex_unlock(&tabla_swap_mutex);
 }
 
 void des_swap(t_pcb* pcb){
@@ -163,7 +167,10 @@ void des_swap(t_pcb* pcb){
 		int escritura = 1;
 		while (escritura){
 			if(espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento]==NULL){
+				pthread_mutex_lock(&escribir_en_memoria);
 				espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento]=swap->valor;
+				pthread_mutex_unlock(&escribir_en_memoria);
+				bitarray_set_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
 				escritura = 0;
 			}
 			swap->desplazamiento++;
@@ -174,8 +181,63 @@ void des_swap(t_pcb* pcb){
 			t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
 			pthread_mutex_unlock(&tabla_swap_mutex);
 			if(fila_swap->pid==pcb->pid){
+				pthread_mutex_lock(&tabla_swap_mutex);
 				list_add(fila_swap->lista_datos,swap);
+				pthread_mutex_unlock(&tabla_swap_mutex);
 			}
+		}
+	}
+	fclose(fp);
+}
+
+void limpiar_swap(int pid){
+	t_list_iterator* iterator = list_iterator_create(tabla_swap);
+	int index_a_liberar = -1;
+	pthread_mutex_lock(&tabla_swap_mutex);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tabla_swap_mutex);
+		pthread_mutex_lock(&tabla_swap_mutex);
+    	t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
+		pthread_mutex_unlock(&tabla_swap_mutex);
+		if(fila_swap->pid==pid){
+			index_a_liberar = iterator->index;
+		}
+	}
+	pthread_mutex_unlock(&tabla_swap_mutex);
+	pthread_mutex_lock(&tabla_swap_mutex);
+	list_remove(tabla_swap,index_a_liberar);
+	pthread_mutex_unlock(&tabla_swap_mutex);
+	char pidchar[5];
+	sprintf(pidchar, "%d", pid);
+	const char* barra = "/";
+	const char* extension = ".swap";
+	char * path = malloc(256); 
+	path = strcpy(path, path_swap);	
+	strcat(path, barra);
+	strcat(path, pidchar);
+	strcat(path, extension);
+	printf("Se elimina el archivo %s \n", pidchar);
+	remove(path);
+}
+
+void liberar_memoria_de_proceso(int pid){
+	char pidchar[5];
+	sprintf(pidchar, "%d", pid);
+	FILE* fp = archivo_de_swap(pidchar,0);
+	t_escritura_swap* swap = malloc(sizeof(t_escritura_swap));
+	size_t resultado;
+	while (!feof(fp)){
+   		 resultado = fread(swap, sizeof(t_escritura_swap), 1, fp);
+		if (resultado != 1){
+			break;
+		}
+		int escritura = 1;
+		while (escritura){
+			pthread_mutex_lock(&escribir_en_memoria);
+			espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento]=NULL;
+			bitarray_clean_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
+			pthread_mutex_unlock(&escribir_en_memoria);
+			escritura = 0;
 		}
 	}
 	fclose(fp);
@@ -353,7 +415,9 @@ int atender_cliente(void* arg){
 						espacio_Contiguo_En_Memoria[marco+desplazamiento] = valor;
 						pthread_mutex_unlock(&escribir_en_memoria);
 						t_list_iterator* iterator = list_iterator_create(tabla_swap);
+						pthread_mutex_lock(&tabla_swap_mutex);
 						while(list_iterator_has_next(iterator)){
+							pthread_mutex_unlock(&tabla_swap_mutex);
         					pthread_mutex_lock(&tabla_swap_mutex);
 							t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
 							pthread_mutex_unlock(&tabla_swap_mutex);
@@ -367,6 +431,7 @@ int atender_cliente(void* arg){
 								pthread_mutex_unlock(&tabla_swap_mutex);
 							}
 						}
+						pthread_mutex_unlock(&tabla_swap_mutex);
 				}
 				pthread_mutex_lock(&escribir_en_memoria);
 				agregar_entero_a_paquete(paquete,espacio_Contiguo_En_Memoria[marco+desplazamiento]);
@@ -424,6 +489,8 @@ int atender_cliente(void* arg){
 			case FINALIZAR_PROCESO:
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
+				liberar_memoria_de_proceso(pid);
+				limpiar_swap(pid);
 				paquete = crear_paquete();
     			paquete->codigo_operacion = FINALIZAR_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
