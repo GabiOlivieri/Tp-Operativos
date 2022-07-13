@@ -425,7 +425,7 @@ int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configur
 	return direccion_fisica_entrada_segunda_tabla;
 }
 
-int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones, int tabla_segundo_nivel,int entrada_segunda_tabla,op_ins codigo_operacion,t_list* tlb){
+int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configuraciones, int tabla_segundo_nivel,int entrada_segunda_tabla,op_ins codigo_operacion){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = SEGUNDO_ACCESSO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);

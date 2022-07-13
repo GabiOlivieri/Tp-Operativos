@@ -32,6 +32,8 @@ pthread_mutex_t bitmap_memoria_mutex;
 sem_t sem; // swap
 sem_t kernel_mutex_binario;
 
+//Semaforos tipo cliente servidor
+
 
 
 
@@ -378,6 +380,8 @@ int atender_cliente(void* arg){
 						break;
 					case WRITE:
 						if (!frame_valido(tabla_segundo_nivel,entrada_tabla_segundo_nivel)){
+							if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso))
+								printf("Hay que reemplazar algun frame \n");
 							printf("El frame no está presente en memoria y voy a escribirlo \n");
 							fila_tabla_segundo_nivel = buscar_frame_libre(tabla_segundo_nivel,p->configuraciones);
 							pthread_mutex_lock(&tablas_segundo_nivel_mutex);
@@ -532,6 +536,66 @@ bool frame_valido(t_list* tabla_segundo_nivel,int marco_solicitado){
 	return fila_tabla_segundo_nivel->p != 0;
 }
 
+bool puede_agregar_marco(int nro_tabla_segundo_nivel,int cant_frames_posibles){
+	int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
+	t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
+//	printf("El proceso tiene %d marcos\n",list_size(marcos_de_los_proceso));
+	return list_size(marcos_de_los_proceso) < cant_frames_posibles;
+}
+
+t_list* marcos_del_proceso(int nro_tabla_primer_nivel){
+	t_list* marcos_de_proceso = list_create();
+	pthread_mutex_lock(&tablas_primer_nivel_mutex);
+	t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
+	pthread_mutex_unlock(&tablas_primer_nivel_mutex);
+	t_list_iterator* iterator = list_iterator_create(tabla_primer_nivel);
+	while(list_iterator_has_next(iterator)){
+		t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_iterator_next(iterator);
+		t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,fila_tabla_primer_nivel->nro_tabla);
+		t_list_iterator* iterator_tabla_segundo_nivel = list_iterator_create(tabla_segundo_nivel);
+		while(list_iterator_has_next(iterator_tabla_segundo_nivel)){
+			t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_tabla_segundo_nivel);
+			if (fila_tabla_segundo_nivel->p == 1){
+	//			printf("Encontre un marco del proceso en las entradas %d y %d \n",iterator->index,iterator_tabla_segundo_nivel->index );
+				t_info_marcos_por_proceso* marco_del_proceso = malloc(sizeof(t_info_marcos_por_proceso));
+				marco_del_proceso->entrada_segundo_nivel = fila_tabla_segundo_nivel;
+				t_indice* indice = malloc(sizeof(t_indice));
+				indice->entrada_primer_nivel = iterator->index;
+				indice->entrada_segundo_nivel = iterator_tabla_segundo_nivel->index;
+				marco_del_proceso->index = indice;
+				list_add(marcos_de_proceso,marco_del_proceso);
+			}
+		}
+	}
+	return marcos_de_proceso;
+}
+
+int buscar_tabla_primer_nivel(int nro_tabla_segundo_nivel){
+	t_list_iterator* iterator = list_iterator_create(tablas_primer_nivel);
+	pthread_mutex_lock(&tablas_primer_nivel_mutex);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tablas_primer_nivel_mutex);
+		pthread_mutex_lock(&tablas_primer_nivel_mutex);
+        t_list* tabla_primer_nivel = list_iterator_next(iterator);
+		pthread_mutex_unlock(&tablas_primer_nivel_mutex);
+		t_list_iterator* iterator_tabla_primer_nivel = list_iterator_create(tabla_primer_nivel);
+		while(list_iterator_has_next(iterator_tabla_primer_nivel)){
+			t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_iterator_next(iterator_tabla_primer_nivel);
+		//	printf("tiene la tabla de segundo nivel %d \n",fila_tabla_primer_nivel->nro_tabla);
+			pthread_mutex_lock(&tablas_primer_nivel_mutex);
+			if(fila_tabla_primer_nivel->nro_tabla == nro_tabla_segundo_nivel ){
+				pthread_mutex_unlock(&tablas_primer_nivel_mutex);
+		//		printf("El numero de tabla de segundo nivel es %d \n",nro_tabla_segundo_nivel);
+		//		printf("El numero de tabla de primer nivel es %d \n",iterator->index);
+				return iterator->index;
+			}
+			pthread_mutex_unlock(&tablas_primer_nivel_mutex);
+		}
+		
+	}
+	pthread_mutex_unlock(&tablas_primer_nivel_mutex);
+}
+
 
 // TODO : Cambiar para que acá haga el algoritmo de reemplazo
 t_fila_tabla_paginacion_2doNivel* buscar_frame_libre(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones){
@@ -551,6 +615,8 @@ t_fila_tabla_paginacion_2doNivel* buscar_frame_libre(t_list* tabla_segundo_nivel
 		}
 	}
 }
+
+
 
 int asignar_pagina_de_memoria(){
 	for(int i = 0; i < bitarray_get_max_bit(bitmap_memoria); i++){

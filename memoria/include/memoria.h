@@ -85,6 +85,18 @@ typedef struct escritura_swap{
     uint32_t valor;
 } t_escritura_swap;
 
+typedef struct indice {
+    int entrada_primer_nivel;
+    int entrada_segundo_nivel;
+} t_indice;
+
+typedef struct info_marcos_por_proceso{
+    t_fila_tabla_paginacion_2doNivel* entrada_segundo_nivel;
+    t_indice* index;
+} t_info_marcos_por_proceso;
+
+
+
 /**
 * @NAME: crear_pcb
 * @DESC: lee los datos del paquete e interpreta las instrucciones para crear el pcb correspondiente
@@ -191,4 +203,8 @@ t_fila_tabla_paginacion_2doNivel* buscar_frame_libre(t_list* tabla_segundo_nivel
 int asignar_pagina_de_memoria();
 
 bool frame_valido(t_list* tabla_segundo_nivel,int marco_solicitado);
+
+t_list* marcos_del_proceso(int nro_tabla_primer_nivel);
+
+bool puede_agregar_marco(int nro_tabla_segundo_nivel,int cant_frames_posibles);
 #endif
