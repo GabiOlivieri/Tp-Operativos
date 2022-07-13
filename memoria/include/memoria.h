@@ -207,4 +207,6 @@ bool frame_valido(t_list* tabla_segundo_nivel,int marco_solicitado);
 t_list* marcos_del_proceso(int nro_tabla_primer_nivel);
 
 bool puede_agregar_marco(int nro_tabla_segundo_nivel,int cant_frames_posibles);
+
+t_fila_tabla_paginacion_2doNivel* ingresar_frame_de_reemplazo(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones,int entrada, int marco);
 #endif
