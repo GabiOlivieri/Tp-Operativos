@@ -132,11 +132,12 @@ void reemplazar_entrada_tlb(t_list* tlb,t_fila_tlb* fila_tlb_a_reemplazar,t_conf
 		t_list_iterator* iterator = list_iterator_create(tlb);
     	while(list_iterator_has_next(iterator)){
 			t_fila_tlb* fila_tlb = list_iterator_next(iterator);
-			if (fila_tlb->instante_de_ultima_referencia < elegido->instante_de_ultima_referencia){
+			if (difftime(fila_tlb->instante_de_ultima_referencia, elegido->instante_de_ultima_referencia) < 0 ){
 				index_elegido = iterator->index;
 				elegido = fila_tlb;
 			}
 		}
+		printf("Reemplazo la pagina %d con LRU \n",index_elegido);
 		list_iterator_destroy(iterator);
 	}
 	else
@@ -144,14 +145,15 @@ void reemplazar_entrada_tlb(t_list* tlb,t_fila_tlb* fila_tlb_a_reemplazar,t_conf
 		t_list_iterator* iterator = list_iterator_create(tlb);
     	while(list_iterator_has_next(iterator)){
 			t_fila_tlb* fila_tlb = list_iterator_next(iterator);
-			if (fila_tlb->instante_de_carga < elegido->instante_de_carga){
+			if (difftime(fila_tlb->instante_de_carga,elegido->instante_de_carga) < 0){
 				index_elegido = iterator->index;
 				elegido = fila_tlb;
 			}
 		}
+		printf("Reemplazo la pagina %d con FIFO \n",index_elegido);
 		list_iterator_destroy(iterator);
 	}
-	printf("Reemplazo la pagina %d \n",index_elegido );
+	
 	pthread_mutex_lock(&tlb_mutex);
 	list_replace(tlb,index_elegido,fila_tlb_a_reemplazar);
 	pthread_mutex_unlock(&tlb_mutex);
