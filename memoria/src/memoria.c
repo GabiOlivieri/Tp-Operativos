@@ -389,7 +389,8 @@ int atender_cliente(void* arg){
 									fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
 								}
 								else{
-									printf("Algo salió mal xd");
+									int marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel);
+									fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
 								}
 							}
 							else{
@@ -737,9 +738,10 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel)
 		}
 
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
-		
 		punteroClock++;
+
 	//	printf("Bit de uso == %d \n",recorredorPaginas->entrada_segundo_nivel->u);
+
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 ){
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
 			printf("Victima CLOCK: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
@@ -773,6 +775,94 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel)
 
 }
 
+int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_primer_nivel)
+//paginas_ppal lista de paginas del proceso
+{
+    
+	int punteroClock = 0;
+	t_info_marcos_por_proceso* recorredorPaginas;
+	int cantidadFrames = list_size(marcosProceso);
+//	printf("Voy a analizar los %d frames del proceso\n", cantidadFrames);
+	int marco;
+
+	//esta es la primera vuelta para encontrar 0|0
+	for(int i = 0; i < cantidadFrames ; i++){
+		if(punteroClock == cantidadFrames) // Vuelve a poner arriba al puntero
+		{
+			punteroClock = 0;
+		}
+
+		recorredorPaginas = list_get(marcosProceso, punteroClock);
+		punteroClock++;
+
+		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 0 ){
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
+			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+				recorredorPaginas->entrada_segundo_nivel->marco);
+			return marco; // Para que lo retorna??
+		}
+
+	}
+
+	//esta segunda vuelta es para encontrar 0|1 modificando el bit de uso
+	for(int i = 0; i < cantidadFrames ; i++){
+		if(punteroClock == cantidadFrames)
+		{
+			punteroClock = 0;
+		}
+
+		recorredorPaginas = list_get(marcosProceso, punteroClock);
+		punteroClock++;
+
+		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 1 ){
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
+			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+				recorredorPaginas->entrada_segundo_nivel->marco);
+			return marco; // Para que lo retorna??
+		}
+
+		recorredorPaginas->entrada_segundo_nivel->u = 0;
+
+	}
+
+	//esta tercera vuelta es para encontrar 0|0
+	for(int i = 0; i < cantidadFrames ; i++){
+		if(punteroClock == cantidadFrames)
+		{
+			punteroClock = 0;
+		}
+
+		recorredorPaginas = list_get(marcosProceso, punteroClock);
+		punteroClock++;
+
+		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 0 ){
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
+			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+				recorredorPaginas->entrada_segundo_nivel->marco);
+			return marco; // Para que lo retorna??
+		}
+
+	}
+
+	//esta segunda vuelta es para encontrar 0|1
+	for(int i = 0; i < cantidadFrames ; i++){
+		if(punteroClock == cantidadFrames)
+		{
+			punteroClock = 0;
+		}
+
+		recorredorPaginas = list_get(marcosProceso, punteroClock);
+		punteroClock++;
+
+		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 1 ){
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
+			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+				recorredorPaginas->entrada_segundo_nivel->marco);
+			return marco; // Para que lo retorna??
+		}
+	}
+}
+
 int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_primer_nivel){
 	pthread_mutex_lock(&tablas_primer_nivel_mutex);
 	t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
@@ -787,7 +877,6 @@ int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_
 	// TODO swapear proceso
 	fila_tabla_paginacion_2doNivel->m = 0;
 	fila_tabla_paginacion_2doNivel->p = 0;
-	fila_tabla_paginacion_2doNivel->marco = NULL;
 	fila_tabla_paginacion_2doNivel->u = 0;
 
 	//printf("Asigno pagina %d a marco\n", marco_a_asignar);
