@@ -117,13 +117,13 @@ void modulo_swap(void* arg){
 			//	printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
 				queue_push(en_swap,pcb);
-				swap(pcb);
+				suspender(pcb);
 				t_paquete* paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pcb->pid);
 				enviar_paquete(paquete,socket_kernel_swap);
 				pcb = queue_pop(en_swap);
-				des_swap(pcb);
+				des_suspender(pcb);
 				sem_post(&sem);
 				eliminar_paquete(paquete);
 			}
@@ -131,7 +131,7 @@ void modulo_swap(void* arg){
 	}
 }
 
-void swap(t_pcb* pcb){
+void suspender(t_pcb* pcb){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
 	pthread_mutex_lock(&tabla_swap_mutex);
 	while(list_iterator_has_next(iterator)){
@@ -154,14 +154,78 @@ void swap(t_pcb* pcb){
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_clean_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
+				marco_swapeado(swap->marco,1);
 			}
 			fclose(fp);
 		}
 	}
 	pthread_mutex_unlock(&tabla_swap_mutex);
+	
 }
 
-void des_swap(t_pcb* pcb){
+void marco_swapeado(int marco,int modo){
+	t_list_iterator* iterator = list_iterator_create(tablas_segundo_nivel);
+	pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+		t_list* tabla_segundo_nivel= list_iterator_next(iterator);
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);			
+		t_list_iterator* iterator_tabla = list_iterator_create(tabla_segundo_nivel);
+		pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+		while(list_iterator_has_next(iterator_tabla)){
+			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+			pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+			t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_tabla);
+			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+			if(fila_tabla_segundo_nivel->marco==marco){
+				if(modo){
+					fila_tabla_segundo_nivel->p = 0;
+					fila_tabla_segundo_nivel->m = 0;
+					fila_tabla_segundo_nivel->u = 0;	
+				}else{
+					fila_tabla_segundo_nivel->p = 1;
+					fila_tabla_segundo_nivel->m = 1;
+					fila_tabla_segundo_nivel->u = 1;
+				}	
+			}
+		}
+		pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+	}
+	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+}
+
+void swap(int marco){
+	t_list_iterator* iterator = list_iterator_create(tabla_swap);
+	pthread_mutex_lock(&tabla_swap_mutex);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tabla_swap_mutex);
+		pthread_mutex_lock(&tabla_swap_mutex);
+    	t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
+		pthread_mutex_unlock(&tabla_swap_mutex);
+		t_list_iterator* iterator_swap = list_iterator_create(fila_swap->lista_datos);
+		char pidchar[5];
+		sprintf(pidchar, "%d", fila_swap->pid);
+		while(list_iterator_has_next(iterator_swap)){
+			t_escritura_swap* swap = list_iterator_next(iterator_swap);
+			if(swap->marco==marco){
+				FILE* fp = archivo_de_swap(pidchar,1);
+				fwrite(swap, sizeof(t_escritura_swap),1,fp);
+				pthread_mutex_lock(&escribir_en_memoria);
+				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = NULL;
+				//espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento] = NULL;
+				pthread_mutex_unlock(&escribir_en_memoria);
+				pthread_mutex_lock(&bitmap_memoria_mutex);
+				bitarray_clean_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
+				pthread_mutex_unlock(&bitmap_memoria_mutex);
+				fclose(fp);
+			}
+		}
+	}
+	pthread_mutex_unlock(&tabla_swap_mutex);
+}
+
+void des_suspender(t_pcb* pcb){
 	char pidchar[5];
 	sprintf(pidchar, "%d", pcb->pid);
 	FILE* fp = archivo_de_swap(pidchar,0);
@@ -182,6 +246,7 @@ void des_swap(t_pcb* pcb){
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_set_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
+				marco_swapeado(swap->marco,0);
 				escritura = 0;
 			}
 			swap->desplazamiento++;
@@ -874,7 +939,7 @@ int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_
 	t_fila_tabla_paginacion_2doNivel* fila_tabla_paginacion_2doNivel = list_get(tabla_segundo_nivel,recorredorPaginas->index->entrada_segundo_nivel); 
 
 	int marco_a_asignar = fila_tabla_paginacion_2doNivel->marco;
-	// TODO swapear proceso
+	swap(marco_a_asignar);
 	fila_tabla_paginacion_2doNivel->m = 0;
 	fila_tabla_paginacion_2doNivel->p = 0;
 	fila_tabla_paginacion_2doNivel->u = 0;
