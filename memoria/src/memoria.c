@@ -185,7 +185,7 @@ void marco_swapeado(int marco,int modo){
 					fila_tabla_segundo_nivel->u = 0;	
 				}else{
 					fila_tabla_segundo_nivel->p = 1;
-					fila_tabla_segundo_nivel->m = 1;
+					fila_tabla_segundo_nivel->m = 0;
 					fila_tabla_segundo_nivel->u = 1;
 				}	
 			}
