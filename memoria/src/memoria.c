@@ -117,6 +117,7 @@ void modulo_swap(void* arg){
 			//	printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
 				queue_push(en_swap,pcb);
+				printf("Mando a swap un proceso\n");
 				suspender(pcb);
 				t_paquete* paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
@@ -124,6 +125,7 @@ void modulo_swap(void* arg){
 				enviar_paquete(paquete,socket_kernel_swap);
 				pcb = queue_pop(en_swap);
 				des_suspender(pcb);
+				printf("Saco de swap un proceso\n");
 				sem_post(&sem);
 				eliminar_paquete(paquete);
 			}
@@ -180,10 +182,12 @@ void marco_swapeado(int marco,int modo){
 			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 			if(fila_tabla_segundo_nivel->marco==marco){
 				if(modo){
+					printf("Actualizo marco de proceso a swap\n");
 					fila_tabla_segundo_nivel->p = 0;
 					fila_tabla_segundo_nivel->m = 0;
 					fila_tabla_segundo_nivel->u = 0;	
 				}else{
+					printf("Actualizo marco a presente de swap\n");
 					fila_tabla_segundo_nivel->p = 1;
 					fila_tabla_segundo_nivel->m = 0;
 					fila_tabla_segundo_nivel->u = 1;
@@ -763,7 +767,7 @@ int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
 				for(int j = 1; j <= configuraciones->entradas_por_tabla; j++){
 					
 					t_fila_tabla_paginacion_2doNivel* filas_tabla_segundo_nivel = malloc(sizeof(t_fila_tabla_paginacion_2doNivel));
-					filas_tabla_segundo_nivel->marco = NULL;
+					filas_tabla_segundo_nivel->marco = -1; // está libre
 					filas_tabla_segundo_nivel->p = 0;
 					filas_tabla_segundo_nivel->u = 0;
 					filas_tabla_segundo_nivel->m = 0;
@@ -809,7 +813,7 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel)
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 ){
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
-			printf("Victima CLOCK: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+			printf("Victima CLOCK: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
 			return marco; // Para que lo retorna??
 		} 
@@ -832,7 +836,7 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel)
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 ){
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
-			printf("Victima CLOCK: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+			printf("Victima CLOCK: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
 			return marco; // Para que lo retorna??
 		} 
@@ -862,7 +866,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 0 ){
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
-			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
 			return marco; // Para que lo retorna??
 		}
@@ -881,7 +885,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 1 ){
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
-			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
 			return marco; // Para que lo retorna??
 		}
@@ -902,7 +906,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 0 ){
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
-			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
 			return marco; // Para que lo retorna??
 		}
@@ -921,7 +925,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 1 ){
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
-			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", recorredorPaginas->entrada_segundo_nivel->marco,
+			printf("Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
 			return marco; // Para que lo retorna??
 		}
