@@ -270,6 +270,36 @@ void des_suspender(t_pcb* pcb){
 	fclose(fp);
 }
 
+void des_swap(int marco_anterior, int marco_nuevo){
+	t_list_iterator* iterator = list_iterator_create(tabla_swap);
+	pthread_mutex_lock(&tabla_swap_mutex);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tabla_swap_mutex);
+		pthread_mutex_lock(&tabla_swap_mutex);
+    	t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
+		pthread_mutex_unlock(&tabla_swap_mutex);
+		t_list_iterator* iterator_swap = list_iterator_create(fila_swap->lista_datos);
+		char pidchar[5];
+		sprintf(pidchar, "%d", fila_swap->pid);
+		while(list_iterator_has_next(iterator_swap)){
+			t_escritura_swap* swap = list_iterator_next(iterator_swap);
+			if(swap->marco==marco_anterior){
+				swap->marco=marco_nuevo;
+				FILE* fp = archivo_de_swap(pidchar,1);
+				fwrite(swap, sizeof(t_escritura_swap),1,fp);
+				pthread_mutex_lock(&escribir_en_memoria);
+				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = swap->valor;
+				pthread_mutex_unlock(&escribir_en_memoria);
+				pthread_mutex_lock(&bitmap_memoria_mutex);
+				bitarray_set_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
+				pthread_mutex_unlock(&bitmap_memoria_mutex);
+				fclose(fp);
+			}
+		}
+	}
+	pthread_mutex_unlock(&tabla_swap_mutex);
+}
+
 void limpiar_swap(int pid){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
 	int index_a_liberar = -1;
@@ -441,7 +471,19 @@ int atender_cliente(void* arg){
 							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 						}else if (fila_tabla_segundo_nivel->p == 0 & fila_tabla_segundo_nivel->marco >= 0){
 							printf("El frame no está presente en memoria y necesito traelo del swap\n");
-							//deswap
+							int marco_anterior = fila_tabla_segundo_nivel->marco;
+							int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
+							t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
+							if(strcmp(p->configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
+								int marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel);
+								des_swap(marco_anterior,marco);
+								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+								}
+							else{
+								int marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel);
+								des_swap(marco_anterior,marco);
+								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+							}
 						}else{
 							printf("El frame es invalido y va a contestarle a cpu con un -1 \n");
 						}
@@ -455,9 +497,22 @@ int atender_cliente(void* arg){
 							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 						}else if (fila_tabla_segundo_nivel->p == 0 & fila_tabla_segundo_nivel->marco >= 0){
 							printf("El frame no está presente en memoria y necesito traelo del swap\n");
-							//deswap
+							int marco_anterior = fila_tabla_segundo_nivel->marco;
+							int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
+							t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
+							if(strcmp(p->configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
+								int marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel);
+								des_swap(marco_anterior,marco);
+								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+								}
+							else{
+								int marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel);
+								des_swap(marco_anterior,marco);
+								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+							}
+						
 						}else{
-							printf("El frame esta disponible para ser escrito\n");
+							printf("El frame no esta asignado\n");
 							if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso)){
 								printf("Hay que reemplazar algun frame \n");
 								int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
