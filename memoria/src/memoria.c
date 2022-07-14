@@ -428,27 +428,36 @@ int atender_cliente(void* arg){
 				t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,nro_tabla_segundo_nivel);
 				pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 				t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel;
+				pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+				fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
+				pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 				switch(operacion){
 					case READ:
-						if(frame_valido(tabla_segundo_nivel,entrada_tabla_segundo_nivel)){
+						if(fila_tabla_segundo_nivel->p == 1){
 							printf("El frame está presente en memoria y va a contestarle a cpu \n");
-							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
-							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
-							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 							fila_tabla_segundo_nivel->u = 1;
 							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
 							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
-						}
-						else{
-							printf("El frame no está presente en memoria y va a contestarle a cpu con un 0 \n");
-							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
-							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
-							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+						}else if (fila_tabla_segundo_nivel->p == 0 & fila_tabla_segundo_nivel->marco >= 0){
+							printf("El frame no está presente en memoria y necesito traelo del swap\n");
+							//deswap
+						}else{
+							printf("El frame es invalido y va a contestarle a cpu con un -1 \n");
 						}
 						break;
 					case WRITE:
-						if (!frame_valido(tabla_segundo_nivel,entrada_tabla_segundo_nivel)){
+						if(fila_tabla_segundo_nivel->p == 1){
+							printf("El frame está presente en memoria y voy a usarlo \n");
+							fila_tabla_segundo_nivel->u = 1;
+							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
+							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+						}else if (fila_tabla_segundo_nivel->p == 0 & fila_tabla_segundo_nivel->marco >= 0){
+							printf("El frame no está presente en memoria y necesito traelo del swap\n");
+							//deswap
+						}else{
+							printf("El frame esta disponible para ser escrito\n");
 							if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso)){
 								printf("Hay que reemplazar algun frame \n");
 								int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
@@ -461,27 +470,15 @@ int atender_cliente(void* arg){
 									int marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel);
 									fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
 								}
-							}
-							else{
-								printf("El frame no está presente en memoria y voy a escribirlo \n");
+							}else{
+								printf("Escribo en un frame nuevo \n");
 								fila_tabla_segundo_nivel = buscar_frame_libre(tabla_segundo_nivel,p->configuraciones);
 								pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 								list_replace(tablas_segundo_nivel,nro_tabla_segundo_nivel,tabla_segundo_nivel);
 								pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 							}
-						}	
-						else{
-							printf("El frame está presente en memoria y voy a usarlo \n");
-							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
-							fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
-							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
-							fila_tabla_segundo_nivel->u = 1;
-							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
-							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
-							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 						}
 						break;
-
 				}
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
