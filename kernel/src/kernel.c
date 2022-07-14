@@ -117,7 +117,7 @@ void planificador_corto_plazo(void* arg){
 				int size = queue_size(p->colas->cola_ready);
 				pthread_mutex_unlock (&cola_ready_mutex);
 				int estimaciones[p->configuraciones->grado_multiprogramacion];
-				printf("La cola READY tiene %d procesos para ejecutar\n",size);
+				printf("La cola READY tiene %d procesos para ejecutar (SRT)\n",size);
 				if(size > 1){
 					memset(estimaciones, 0, sizeof estimaciones);
 				for(int j = 0; j < size; j++){
@@ -372,6 +372,7 @@ void planificador_mediano_plazo(void* arg){
 			if (procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
 				t_pcb* pcb = queue_pop(p->colas->cola_ready_suspended);
 				pthread_mutex_unlock (&procesos_en_memoria_mutex);
+				sacar_de_swap(p->logger,p->configuraciones,pcb);
 			//	printf("Sale de la cola READY SUSPENDED a READY\n");
 				pthread_mutex_lock (&cola_ready_mutex);
 				queue_push(p->colas->cola_ready,pcb);
@@ -429,6 +430,24 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
 	pthread_t hilo_bloquear_proceso;
     pthread_create (&hilo_bloquear_proceso, NULL , (void*) bloquear_proceso,(void*) planificador);
     pthread_detach(hilo_bloquear_proceso);
+}
+
+void sacar_de_swap(t_log* logger,t_configuraciones* configuraciones,t_pcb* pcb){
+	t_paquete* paquete = crear_paquete();
+	paquete->codigo_operacion = SACAR_DE_SWAP;
+	printf("Mando SACAR_DE_SWAP a memoria\n");
+	int conexion = crear_conexion(logger , "Memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
+	agregar_entero_a_paquete(paquete,pcb->pid);
+	sem_wait(&cliente_servidor);
+	enviar_paquete(paquete,conexion);
+	eliminar_paquete(paquete);
+	int codigoOperacion = recibir_operacion(conexion);
+	sem_post(&cliente_servidor);
+	int size;
+	char* buffer = recibir_buffer(&size, conexion);
+	close(conexion);
+	int estado_deswap = leer_entero(buffer,0);
+	printf("Saco de swap el proceso %d\n", pcb->pid);
 }
 
 void iniciar_estructuras(t_log* logger,t_configuraciones* configuraciones,t_pcb* pcb){
