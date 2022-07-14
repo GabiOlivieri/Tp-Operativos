@@ -184,13 +184,9 @@ void marco_swapeado(int marco,int modo){
 				if(modo){
 					printf("Actualizo marco de proceso a swap\n");
 					fila_tabla_segundo_nivel->p = 0;
-					fila_tabla_segundo_nivel->m = 0;
-					fila_tabla_segundo_nivel->u = 0;	
 				}else{
 					printf("Actualizo marco a presente de swap\n");
 					fila_tabla_segundo_nivel->p = 1;
-					fila_tabla_segundo_nivel->m = 0;
-					fila_tabla_segundo_nivel->u = 1;
 				}	
 			}
 		}
@@ -285,6 +281,7 @@ void des_swap(int marco_anterior, int marco_nuevo){
 			t_escritura_swap* swap = list_iterator_next(iterator_swap);
 			if(swap->marco==marco_anterior){
 				swap->marco=marco_nuevo;
+				list_replace(fila_swap->lista_datos,iterator_swap->index,swap);
 				FILE* fp = archivo_de_swap(pidchar,1);
 				fwrite(swap, sizeof(t_escritura_swap),1,fp);
 				pthread_mutex_lock(&escribir_en_memoria);
@@ -444,6 +441,7 @@ int atender_cliente(void* arg){
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				close(p->socket);
 				pthread_exit(NULL);
 				break;
 
@@ -477,12 +475,12 @@ int atender_cliente(void* arg){
 							if(strcmp(p->configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
 								int marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel);
 								des_swap(marco_anterior,marco);
-								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco,0);
 								}
 							else{
 								int marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel);
 								des_swap(marco_anterior,marco);
-								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco,0);
 							}
 						}else{
 							printf("El frame es invalido y va a contestarle a cpu con un -1 \n");
@@ -492,10 +490,11 @@ int atender_cliente(void* arg){
 						if(fila_tabla_segundo_nivel->p == 1){
 							printf("El frame está presente en memoria y voy a usarlo \n");
 							fila_tabla_segundo_nivel->u = 1;
+							fila_tabla_segundo_nivel->m = 1;
 							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
 							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
-						}else if (fila_tabla_segundo_nivel->p == 0 & fila_tabla_segundo_nivel->marco >= 0){
+						}else if (fila_tabla_segundo_nivel->p == 0 & fila_tabla_segundo_nivel->marco >= 0 & fila_tabla_segundo_nivel->p == 0){
 							printf("El frame no está presente en memoria y necesito traelo del swap\n");
 							int marco_anterior = fila_tabla_segundo_nivel->marco;
 							int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
@@ -503,12 +502,12 @@ int atender_cliente(void* arg){
 							if(strcmp(p->configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
 								int marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel);
 								des_swap(marco_anterior,marco);
-								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco,1);
 								}
 							else{
 								int marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel);
 								des_swap(marco_anterior,marco);
-								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco,1);
 							}
 						
 						}else{
@@ -519,11 +518,11 @@ int atender_cliente(void* arg){
 								t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
 								if(strcmp(p->configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
 									int marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel);
-									fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+									fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco,1);
 								}
 								else{
 									int marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel);
-									fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco);
+									fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco,1);
 								}
 							}else{
 								printf("Escribo en un frame nuevo \n");
@@ -542,6 +541,7 @@ int atender_cliente(void* arg){
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				close(p->socket);
 				pthread_exit(NULL);
 				break;
 			
@@ -593,7 +593,9 @@ int atender_cliente(void* arg){
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				close(p->socket);
 				pthread_exit(NULL);
+				
 				break;
 
 			case HANDSHAKE:
@@ -604,7 +606,9 @@ int atender_cliente(void* arg){
 				agregar_entero_a_paquete(paquete,p->configuraciones->tam_pagina);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				close(p->socket);
 				pthread_exit(NULL);
+				
     			break;
 
 			case INICIAR_PROCESO:
@@ -620,7 +624,9 @@ int atender_cliente(void* arg){
 				pthread_mutex_unlock(&cola_procesos_a_inicializar_mutex);
 
 				sem_post(&kernel_mutex_binario);
+				close(p->socket);
 				pthread_exit(NULL);
+				
 				break;
 
     		case ENVIAR_A_SWAP:
@@ -637,7 +643,9 @@ int atender_cliente(void* arg){
 				queue_push(p->cola_suspendidos,pcb_swap);
 				pthread_mutex_unlock(&cola_suspendidos_mutex);
 				sem_post(&sem);
+				close(p->socket);
 				pthread_exit(NULL);
+				
     			break;
 
 			case FINALIZAR_PROCESO:
@@ -650,7 +658,9 @@ int atender_cliente(void* arg){
 				agregar_entero_a_paquete(paquete,pid);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				close(p->socket);
 				pthread_exit(NULL);
+				
 				break;
 			
     		case -1:
@@ -678,6 +688,13 @@ bool puede_agregar_marco(int nro_tabla_segundo_nivel,int cant_frames_posibles){
 	return list_size(marcos_de_los_proceso) < cant_frames_posibles;
 }
 
+bool sorteanding(t_info_marcos_por_proceso* marco1, t_info_marcos_por_proceso* marco2){
+	if(marco1->entrada_segundo_nivel->marco > marco2->entrada_segundo_nivel->marco)
+	return false;
+	else if (marco1->entrada_segundo_nivel->marco < marco2->entrada_segundo_nivel->marco)
+	return true;
+}
+
 t_list* marcos_del_proceso(int nro_tabla_primer_nivel){
 	t_list* marcos_de_proceso = list_create();
 	pthread_mutex_lock(&tablas_primer_nivel_mutex);
@@ -702,6 +719,7 @@ t_list* marcos_del_proceso(int nro_tabla_primer_nivel){
 			}
 		}
 	}
+	list_sort(marcos_de_proceso,sorteanding);
 	return marcos_de_proceso;
 }
 
@@ -751,10 +769,10 @@ t_fila_tabla_paginacion_2doNivel* buscar_frame_libre(t_list* tabla_segundo_nivel
 	}
 }
 
-t_fila_tabla_paginacion_2doNivel* ingresar_frame_de_reemplazo(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones,int entrada, int marco){
+t_fila_tabla_paginacion_2doNivel* ingresar_frame_de_reemplazo(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones,int entrada, int marco,int m){
         t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada);
 		fila_tabla_segundo_nivel->p = 1;
-		fila_tabla_segundo_nivel->m = 1;
+		fila_tabla_segundo_nivel->m = m;
 		fila_tabla_segundo_nivel->u = 1;
 		fila_tabla_segundo_nivel->marco = marco;
 		pthread_mutex_lock(&tabla_segundo_nivel_mutex);
@@ -848,6 +866,7 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel)
 	int punteroClock = 0;
 	t_info_marcos_por_proceso* recorredorPaginas;
 	int cantidadFrames = list_size(marcosProceso);
+	printf("Cantidad de frames del proceso: %d\n",cantidadFrames);
 //	printf("Voy a analizar los %d frames del proceso\n", cantidadFrames);
 	int marco;
 
@@ -861,6 +880,8 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel)
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
+		printf("El marco sospechoso tiene u: %d y m: %d y marco: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m,recorredorPaginas->entrada_segundo_nivel->marco);
+
 	//	printf("Bit de uso == %d \n",recorredorPaginas->entrada_segundo_nivel->u);
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 ){
@@ -869,12 +890,9 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel)
 				recorredorPaginas->entrada_segundo_nivel->marco);
 			return marco; // Para que lo retorna??
 		} 
-			
-			recorredorPaginas->entrada_segundo_nivel->u = 0;
-	//		printf("Actualizo bit de uso a 0\n");
-			list_replace(marcosProceso,punteroClock,recorredorPaginas);
-			//return recorredorPaginas; VA O NO VA?
-		}
+		printf("El el marco tenia bit de u en 1 \n");
+		actualizar_bit_u(recorredorPaginas,nro_tabla_primer_nivel);
+	}
 
 	//esta segunda vuelta es para encontrar 0 
 	for(int i = 0; i < cantidadFrames ; i++){
@@ -885,6 +903,8 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel)
 
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
+
+		printf("El marco sospechoso tiene u: %d y m: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m);
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 ){
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel);
@@ -942,7 +962,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 			return marco; // Para que lo retorna??
 		}
 
-		recorredorPaginas->entrada_segundo_nivel->u = 0;
+		actualizar_bit_u(recorredorPaginas,nro_tabla_primer_nivel);
 
 	}
 
@@ -996,9 +1016,9 @@ int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_
 
 	int marco_a_asignar = fila_tabla_paginacion_2doNivel->marco;
 	swap(marco_a_asignar);
-	fila_tabla_paginacion_2doNivel->m = 0;
 	fila_tabla_paginacion_2doNivel->p = 0;
-	fila_tabla_paginacion_2doNivel->u = 0;
+
+	printf("La fila tenia u: %d y m: %d \n",fila_tabla_paginacion_2doNivel->u,fila_tabla_paginacion_2doNivel->m);
 
 	//printf("Asigno pagina %d a marco\n", marco_a_asignar);
 
@@ -1008,6 +1028,24 @@ int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_
 	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 
 	return marco_a_asignar;
+}
+
+void actualizar_bit_u(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_primer_nivel){
+	pthread_mutex_lock(&tablas_primer_nivel_mutex);
+	t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
+	pthread_mutex_unlock(&tablas_primer_nivel_mutex);
+	t_fila_tabla_paginacion_1erNivel* fila_tabla_paginacion_1erNivel = list_get(tabla_primer_nivel,recorredorPaginas->index->entrada_primer_nivel);
+	pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+	t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,fila_tabla_paginacion_1erNivel->nro_tabla);
+	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+	t_fila_tabla_paginacion_2doNivel* fila_tabla_paginacion_2doNivel = list_get(tabla_segundo_nivel,recorredorPaginas->index->entrada_segundo_nivel); 
+
+	fila_tabla_paginacion_2doNivel->u = 0;
+
+	//printf("Asigno pagina %d a marco\n", marco_a_asignar);
+
+	list_replace(tabla_segundo_nivel,recorredorPaginas->index->entrada_segundo_nivel,fila_tabla_paginacion_2doNivel);
+
 }
 
 

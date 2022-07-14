@@ -247,6 +247,7 @@ void enviar_pcb(void* arg){
 	int codigoOperacion = recibir_operacion(conexion);
 	int size;
     char * buffer = recibir_buffer(&size, conexion);
+	close(conexion);
 	actualizar_pcb(buffer,p->configuraciones,p->logger,p->colas);
 }
 
@@ -351,6 +352,7 @@ void planificador_mediano_plazo(void* arg){
 				eliminar_paquete(paquete);
 				int size;
 				char * buffer = recibir_buffer(&size, conexion);
+				close(conexion);
 				queue_push(p->colas->cola_io,info_nuevo_bloqueado);
 				sem_post (&planificador_largo_mutex_binario);
 				sem_post (&planificador_corto_binario);
@@ -457,6 +459,7 @@ void iniciar_estructuras(t_log* logger,t_configuraciones* configuraciones,t_pcb*
 	sem_post(&cliente_servidor);
 	int size;
 	char* buffer = recibir_buffer(&size, conexion);
+	close(conexion);
 	if(leer_entero(buffer,0) < 0){
 		printf("Falló al iniciar pcb\n");
 		free(pcb);
@@ -482,6 +485,7 @@ int atender_cliente(void* arg){
 			break;
 		case INICIAR_PROCESO:
 			iniciar_proceso(p->logger,p->socket,p->configuraciones,p->colas->cola_new);
+			close(p->socket);
 			pthread_exit(NULL);
 			break;
 		case -1:

@@ -290,14 +290,17 @@ int atender_cliente(void* arg){
 				pcb->rafaga_anterior= rafaga * 1000000;
 				limpiar_TLB(p->tlb);
        			devolver_pcb(pcb,p->logger,p->socket);
+				close(p->socket);
 				pthread_exit(NULL);
     			break;
 			
     		case -1:
     			log_error(p->logger, "el cliente se desconecto. Terminando servidor");
+				close(p->socket);
     			return EXIT_FAILURE;
     		default:
     			log_warning(p->logger,"Operacion desconocida. No quieras meter la pata");
+				close(p->socket);
     			break;
     		}
 	}
