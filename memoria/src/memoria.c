@@ -27,6 +27,7 @@ pthread_mutex_t socket_kernel_mutex;
 pthread_mutex_t socket_kernel_swap_mutex;
 pthread_mutex_t tabla_swap_mutex;
 pthread_mutex_t bitmap_memoria_mutex;
+pthread_mutex_t lectura_archivo_mutex;
 
 //Semaforos de while 1 con condicional
 sem_t sem; // swap
@@ -145,10 +146,14 @@ void suspender(t_pcb* pcb){
 			t_list_iterator* iterator_swap = list_iterator_create(fila_swap->lista_datos);
 			char pidchar[5];
 			sprintf(pidchar, "%d", pcb->pid);
+			pthread_mutex_lock(&lectura_archivo_mutex);
 			FILE* fp = archivo_de_swap(pidchar,1);
+			pthread_mutex_unlock(&lectura_archivo_mutex);
 			while(list_iterator_has_next(iterator_swap)){
 				t_escritura_swap* swap = list_iterator_next(iterator_swap);
+				pthread_mutex_lock(&lectura_archivo_mutex);
 				fwrite(swap, sizeof(t_escritura_swap),1,fp);
+				pthread_mutex_unlock(&lectura_archivo_mutex);
 				pthread_mutex_lock(&escribir_en_memoria);
 				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = NULL;
 				//espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento] = NULL;
@@ -158,7 +163,9 @@ void suspender(t_pcb* pcb){
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
 				marco_swapeado(swap->marco,1);
 			}
+			pthread_mutex_lock(&lectura_archivo_mutex);
 			fclose(fp);
+			pthread_mutex_unlock(&lectura_archivo_mutex);
 		}
 	}
 	pthread_mutex_unlock(&tabla_swap_mutex);
@@ -209,8 +216,12 @@ void swap(int marco){
 		while(list_iterator_has_next(iterator_swap)){
 			t_escritura_swap* swap = list_iterator_next(iterator_swap);
 			if(swap->marco==marco){
+				pthread_mutex_lock(&lectura_archivo_mutex);
 				FILE* fp = archivo_de_swap(pidchar,1);
+				pthread_mutex_unlock(&lectura_archivo_mutex);
+				pthread_mutex_lock(&lectura_archivo_mutex);
 				fwrite(swap, sizeof(t_escritura_swap),1,fp);
+				pthread_mutex_unlock(&lectura_archivo_mutex);
 				pthread_mutex_lock(&escribir_en_memoria);
 				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = NULL;
 				//espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento] = NULL;
@@ -218,7 +229,9 @@ void swap(int marco){
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_clean_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
+				pthread_mutex_lock(&lectura_archivo_mutex);
 				fclose(fp);
+				pthread_mutex_unlock(&lectura_archivo_mutex);
 			}
 		}
 	}
@@ -228,11 +241,15 @@ void swap(int marco){
 void des_suspender(t_pcb* pcb){
 	char pidchar[5];
 	sprintf(pidchar, "%d", pcb->pid);
+	pthread_mutex_lock(&lectura_archivo_mutex);
 	FILE* fp = archivo_de_swap(pidchar,0);
+	pthread_mutex_unlock(&lectura_archivo_mutex);
 	t_escritura_swap* swap = malloc(sizeof(t_escritura_swap));
 	size_t resultado;
 	while (!feof(fp)){
-   		 resultado = fread(swap, sizeof(t_escritura_swap), 1, fp);
+		pthread_mutex_lock(&lectura_archivo_mutex);
+   		resultado = fread(swap, sizeof(t_escritura_swap), 1, fp);
+		pthread_mutex_unlock(&lectura_archivo_mutex);
 		if (resultado != 1){
 			break;
 		}
@@ -263,7 +280,9 @@ void des_suspender(t_pcb* pcb){
 			}
 		}
 	}
+	pthread_mutex_lock(&lectura_archivo_mutex);
 	fclose(fp);
+	pthread_mutex_unlock(&lectura_archivo_mutex);
 }
 
 void des_swap(int marco_anterior, int marco_nuevo){
@@ -282,15 +301,21 @@ void des_swap(int marco_anterior, int marco_nuevo){
 			if(swap->marco==marco_anterior){
 				swap->marco=marco_nuevo;
 				list_replace(fila_swap->lista_datos,iterator_swap->index,swap);
+				pthread_mutex_lock(&lectura_archivo_mutex);
 				FILE* fp = archivo_de_swap(pidchar,1);
+				pthread_mutex_unlock(&lectura_archivo_mutex);
+				pthread_mutex_lock(&lectura_archivo_mutex);
 				fwrite(swap, sizeof(t_escritura_swap),1,fp);
+				pthread_mutex_unlock(&lectura_archivo_mutex);
 				pthread_mutex_lock(&escribir_en_memoria);
 				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = swap->valor;
 				pthread_mutex_unlock(&escribir_en_memoria);
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_set_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
+				pthread_mutex_lock(&lectura_archivo_mutex);
 				fclose(fp);
+				pthread_mutex_unlock(&lectura_archivo_mutex);
 			}
 		}
 	}
@@ -330,11 +355,15 @@ void limpiar_swap(int pid){
 void liberar_memoria_de_proceso(int pid){
 	char pidchar[5];
 	sprintf(pidchar, "%d", pid);
+	pthread_mutex_lock(&lectura_archivo_mutex);
 	FILE* fp = archivo_de_swap(pidchar,0);
+	pthread_mutex_unlock(&lectura_archivo_mutex);
 	t_escritura_swap* swap = malloc(sizeof(t_escritura_swap));
 	size_t resultado;
 	while (!feof(fp)){
+		pthread_mutex_lock(&lectura_archivo_mutex);
    		 resultado = fread(swap, sizeof(t_escritura_swap), 1, fp);
+			pthread_mutex_unlock(&lectura_archivo_mutex);
 		if (resultado != 1){
 			break;
 		}
@@ -350,7 +379,9 @@ void liberar_memoria_de_proceso(int pid){
 			escritura = 0;
 		}
 	}
+	pthread_mutex_lock(&lectura_archivo_mutex);
 	fclose(fp);
+	pthread_mutex_unlock(&lectura_archivo_mutex);
 }
 
 void hilo_a_kernel(void* arg){
