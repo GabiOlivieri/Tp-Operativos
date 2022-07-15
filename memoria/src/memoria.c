@@ -159,7 +159,6 @@ void suspender(t_pcb* pcb, t_configuraciones* configuraciones){
 				usleep(configuraciones->retardo_swap * 1000);
 				pthread_mutex_lock(&escribir_en_memoria);
 				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = NULL;
-				//espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento] = NULL;
 				pthread_mutex_unlock(&escribir_en_memoria);
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_clean_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
@@ -197,7 +196,8 @@ void marco_swapeado(int marco,int modo){
 				}else{
 					printf("Actualizo marco a presente de swap\n");
 					fila_tabla_segundo_nivel->p = 1;
-				}	
+				}
+				list_replace(tabla_segundo_nivel,iterator_tabla->index,fila_tabla_segundo_nivel);	
 			}
 			pthread_mutex_unlock(&actualizar_marco_mutex);
 		}
@@ -227,7 +227,6 @@ void swap(int marco,t_configuraciones* configuraciones){
 				usleep(configuraciones->retardo_swap * 1000);
 				pthread_mutex_lock(&escribir_en_memoria);
 				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = NULL;
-				//espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento] = NULL;
 				pthread_mutex_unlock(&escribir_en_memoria);
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_clean_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
@@ -252,24 +251,31 @@ void des_suspender(t_pcb* pcb, t_configuraciones* configuraciones){
 			break;
 		}
 		usleep(configuraciones->retardo_swap * 1000);
-		int escritura = 1;
-		while (escritura){
-			pthread_mutex_lock(&escribir_en_memoria);
-			if(((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] == NULL){
-				pthread_mutex_unlock(&escribir_en_memoria);
-				pthread_mutex_lock(&escribir_en_memoria);
-				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = swap->valor;
-				//espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento]=swap->valor;
-				pthread_mutex_unlock(&escribir_en_memoria);
-				pthread_mutex_lock(&bitmap_memoria_mutex);
-				bitarray_set_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
-				pthread_mutex_unlock(&bitmap_memoria_mutex);
-				marco_swapeado(swap->marco,0);
-				escritura = 0;
-			}
+		int marco = swap->marco;
+		pthread_mutex_lock(&escribir_en_memoria);
+		if(marco_desocupado(marco)){
 			pthread_mutex_unlock(&escribir_en_memoria);
-			swap->desplazamiento++;
+			pthread_mutex_lock(&escribir_en_memoria);
+			((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = swap->valor;
+			//espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento]=swap->valor;
+			pthread_mutex_unlock(&escribir_en_memoria);
+			pthread_mutex_lock(&bitmap_memoria_mutex);
+			bitarray_set_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
+			pthread_mutex_unlock(&bitmap_memoria_mutex);
+			marco_swapeado(swap->marco,0);
+		}else{
+			int nro_tabla_segundo_nivel = pcb->pid; //NI IDEA COMO OBTENERLO
+			int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
+			t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
+			if(strcmp(configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
+				int marco_nuevo = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,configuraciones);
+				des_swap(marco,marco_nuevo);
+			}else{
+				int marco_nuevo = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,configuraciones);
+				des_swap(marco,marco_nuevo);				
+			}
 		}
+
 		t_list_iterator* iterator = list_iterator_create(tabla_swap);
 		pthread_mutex_lock(&tabla_swap_mutex);
 		while(list_iterator_has_next(iterator)){
@@ -306,6 +312,7 @@ void des_swap(int marco_anterior, int marco_nuevo,t_configuraciones* configuraci
 			if(swap->marco==marco_anterior){
 				swap->marco=marco_nuevo;
 				list_replace(fila_swap->lista_datos,iterator_swap->index,swap);
+				actualizar_tabla(marco_anterior,marco_nuevo);
 				FILE* fp = archivo_de_swap(pidchar,1);
 				fwrite(swap, sizeof(t_escritura_swap),1,fp);
 				usleep(configuraciones->retardo_swap * 1000);
@@ -316,11 +323,71 @@ void des_swap(int marco_anterior, int marco_nuevo,t_configuraciones* configuraci
 				bitarray_set_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
 				fclose(fp);
+				
 			}
 		}
 		pthread_mutex_unlock(&pid_en_cpu_mutex);
 	}
 	pthread_mutex_unlock(&tabla_swap_mutex);
+}
+
+int marco_desocupado(int marco){
+	t_list_iterator* iterator = list_iterator_create(tablas_segundo_nivel);
+	pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+		t_list* tabla_segundo_nivel= list_iterator_next(iterator);
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);			
+		t_list_iterator* iterator_tabla = list_iterator_create(tabla_segundo_nivel);
+		pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+		while(list_iterator_has_next(iterator_tabla)){
+			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+			pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+			t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_tabla);
+			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+			pthread_mutex_lock(&actualizar_marco_mutex);
+			if(fila_tabla_segundo_nivel->marco==marco & fila_tabla_segundo_nivel->p==1){
+				pthread_mutex_unlock(&actualizar_marco_mutex);
+				return 0;
+			}
+			pthread_mutex_unlock(&actualizar_marco_mutex);
+		}
+		pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+	}
+	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+	return 1;
+}
+
+void actualizar_tabla(int marco_anterior, int marco_nuevo){
+	t_list_iterator* iterator = list_iterator_create(tablas_segundo_nivel);
+	pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+		t_list* tabla_segundo_nivel= list_iterator_next(iterator);
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);			
+		t_list_iterator* iterator_tabla = list_iterator_create(tabla_segundo_nivel);
+		pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+		while(list_iterator_has_next(iterator_tabla)){
+			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+			pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+			t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_tabla);
+			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+			pthread_mutex_lock(&actualizar_marco_mutex);
+			if(fila_tabla_segundo_nivel->marco == marco_anterior){
+				pthread_mutex_unlock(&actualizar_marco_mutex);
+				fila_tabla_segundo_nivel->marco = marco_nuevo;
+				fila_tabla_segundo_nivel->p = 1;
+				list_replace(tabla_segundo_nivel,iterator_tabla->index,fila_tabla_segundo_nivel);
+				break;
+			}
+			pthread_mutex_unlock(&actualizar_marco_mutex);
+		}
+		pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+	}
+	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+	return true;
 }
 
 void limpiar_swap(int pid){
