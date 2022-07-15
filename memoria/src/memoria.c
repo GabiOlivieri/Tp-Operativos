@@ -131,11 +131,12 @@ void modulo_swap(void* arg){
 				enviar_paquete(paquete,socket_kernel_swap);
 				pthread_mutex_unlock (&socket_kernel_mutex);
 				//des_suspender(pcb);
-				//printf("Saco de swap un proceso\n");
+				printf("termino de mandar a swap un proceso\n");
 				sem_post(&swap_mutex_binario);
 				//sem_post(&sem);
 				eliminar_paquete(paquete);
 			}
+			sem_post(&swap_mutex_binario);
 			pthread_mutex_unlock(&cola_suspendidos_mutex);
 	}
 }
@@ -671,7 +672,9 @@ int atender_cliente(void* arg){
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
+				pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 				agregar_entero_a_paquete(paquete,fila_tabla_segundo_nivel->marco);
+				pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
@@ -692,9 +695,6 @@ int atender_cliente(void* arg){
 				uint32_t valor;
 				if ( desplazamiento > p->configuraciones->tam_pagina)
 					printf("Seg Fault\n");
-				paquete = crear_paquete();
-				paquete->codigo_operacion = DEVOLVER_PROCESO;
-				agregar_entero_a_paquete(paquete,pid);
 				switch(operacion){
 					case READ:
 						break;
@@ -723,6 +723,11 @@ int atender_cliente(void* arg){
 						}
 						pthread_mutex_unlock(&tabla_swap_mutex);
 				}
+				paquete = crear_paquete();
+				paquete->codigo_operacion = DEVOLVER_PROCESO;
+				agregar_entero_a_paquete(paquete,pid);
+				printf("marco %d \n",marco);
+				printf("desplazamiento %d \n",desplazamiento);
 				pthread_mutex_lock(&escribir_en_memoria);
 				agregar_entero_a_paquete(paquete,((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento]);
 				pthread_mutex_unlock(&escribir_en_memoria);
@@ -771,9 +776,9 @@ int atender_cliente(void* arg){
 				t_pcb* pcb_swap_sacar = malloc(sizeof(t_pcb));
 				pcb_swap_sacar->pid = leer_entero(buffer_swap_sacar,0);
 				printf("Voy a sacar de swap el pid %d \n",pcb_swap_sacar->pid);
-				sem_wait(&swap_mutex_binario);
+				//sem_wait(&swap_mutex_binario);
 				des_suspender(pcb_swap_sacar,p->configuraciones);
-				sem_post(&swap_mutex_binario);
+				//sem_post(&swap_mutex_binario);
 				paquete = crear_paquete();
 				paquete->codigo_operacion = FINALIZAR_PROCESO;
 				agregar_entero_a_paquete(paquete,pcb_swap_sacar->pid);
