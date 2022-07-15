@@ -257,24 +257,20 @@ void des_suspender(t_pcb* pcb, t_configuraciones* configuraciones){
 		if(marco_desocupado(marco)){
 			pthread_mutex_unlock(&escribir_en_memoria);
 			pthread_mutex_lock(&escribir_en_memoria);
-			((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = swap->valor;
-			//espacio_Contiguo_En_Memoria[swap->marco+swap->desplazamiento]=swap->valor;
+			((uint32_t *)espacio_Contiguo_En_Memoria)[marco+swap->desplazamiento] = swap->valor;
 			pthread_mutex_unlock(&escribir_en_memoria);
 			pthread_mutex_lock(&bitmap_memoria_mutex);
 			bitarray_set_bit(bitmap_memoria,swap->marco+swap->desplazamiento);
 			pthread_mutex_unlock(&bitmap_memoria_mutex);
 			marco_swapeado(swap->marco,0);
 		}else{
-			int nro_tabla_segundo_nivel = buscar_tabla_segundo_nivel(marco); //NI IDEA COMO OBTENERLO
-			int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
-			t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
-			if(strcmp(configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
-				int marco_nuevo = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,configuraciones);
-				des_swap(marco,marco_nuevo);
-			}else{
-				int marco_nuevo = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,configuraciones);
-				des_swap(marco,marco_nuevo);				
-			}
+			int marco_nuevo = asignar_pagina_de_memoria();
+			actualizar_tabla(marco,marco_nuevo);
+			pthread_mutex_unlock(&escribir_en_memoria);
+			pthread_mutex_lock(&escribir_en_memoria);
+			((uint32_t *)espacio_Contiguo_En_Memoria)[marco+swap->desplazamiento] = swap->valor;
+			pthread_mutex_unlock(&escribir_en_memoria);
+			marco_swapeado(swap->marco,0);
 		}
 
 		t_list_iterator* iterator = list_iterator_create(tabla_swap);
