@@ -264,7 +264,7 @@ void des_suspender(t_pcb* pcb, t_configuraciones* configuraciones){
 			pthread_mutex_unlock(&bitmap_memoria_mutex);
 			marco_swapeado(swap->marco,0);
 		}else{
-			int nro_tabla_segundo_nivel = pcb->pid; //NI IDEA COMO OBTENERLO
+			int nro_tabla_segundo_nivel = buscar_tabla_segundo_nivel(marco); //NI IDEA COMO OBTENERLO
 			int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
 			t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
 			if(strcmp(configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
@@ -381,6 +381,33 @@ void actualizar_tabla(int marco_anterior, int marco_nuevo){
 				fila_tabla_segundo_nivel->p = 1;
 				list_replace(tabla_segundo_nivel,iterator_tabla->index,fila_tabla_segundo_nivel);
 				break;
+			}
+			pthread_mutex_unlock(&actualizar_marco_mutex);
+		}
+		pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+	}
+	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+	return true;
+}
+
+int buscar_tabla_segundo_nivel(int marco){
+	t_list_iterator* iterator = list_iterator_create(tablas_segundo_nivel);
+	pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+		t_list* tabla_segundo_nivel= list_iterator_next(iterator);
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);			
+		t_list_iterator* iterator_tabla = list_iterator_create(tabla_segundo_nivel);
+		pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+		while(list_iterator_has_next(iterator_tabla)){
+			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+			pthread_mutex_lock(&tabla_segundo_nivel_mutex);
+			t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_tabla);
+			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+			pthread_mutex_lock(&actualizar_marco_mutex);
+			if(fila_tabla_segundo_nivel->marco == marco){
+				return iterator->index;
 			}
 			pthread_mutex_unlock(&actualizar_marco_mutex);
 		}
