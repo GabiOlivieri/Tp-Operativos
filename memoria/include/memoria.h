@@ -9,6 +9,7 @@
 #include <shared/server.h>
 #include <shared/client.h>
 #include <commons/collections/list.h>
+#include <commons/bitarray.h>
 #include <commons/config.h>
 #include <shared/utils.h>
 #include <commons/collections/queue.h>
@@ -39,8 +40,16 @@ typedef struct hilo_struct {
     int socket;
     t_log* logger;
     t_configuraciones* configuraciones;
-    t_queue* cola;
+    t_queue* cola_suspendidos;
+    t_queue* cola_procesos_a_inicializar;
 } t_hilo_struct;
+
+typedef struct hilo_struct_kernel {
+    int socket;
+    t_log* logger;
+    t_configuraciones* configuraciones;
+    t_queue* cola;
+} t_hilo_struct_kernel;
 
 typedef struct hilo_struct_swap {
     t_log* logger;
@@ -65,6 +74,29 @@ typedef struct fila_tabla_paginacion_2doNivel {
     bool m;
 } t_fila_tabla_paginacion_2doNivel;
 
+typedef struct fila_tabla_swap{
+    int pid;
+    t_list* lista_datos;
+} t_fila_tabla_swap;
+
+typedef struct escritura_swap{
+    int marco;
+    int desplazamiento;
+    uint32_t valor;
+} t_escritura_swap;
+
+typedef struct indice {
+    int entrada_primer_nivel;
+    int entrada_segundo_nivel;
+} t_indice;
+
+typedef struct info_marcos_por_proceso{
+    t_fila_tabla_paginacion_2doNivel* entrada_segundo_nivel;
+    t_indice* index;
+} t_info_marcos_por_proceso;
+
+
+
 /**
 * @NAME: crear_pcb
 * @DESC: lee los datos del paquete e interpreta las instrucciones para crear el pcb correspondiente
@@ -81,7 +113,7 @@ void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb);
 * @NAME: manejar_conexion
 * @DESC: espera clientes y deriva la tarea de atenderlos en un nuevo hilo
 */
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos);
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket, t_queue* cola_suspendidos,t_queue* cola_procesos_a_crear);
 
 /**
 * @NAME: atender_cliente
@@ -91,6 +123,8 @@ int atender_cliente(void* hilo_struct);
 
 
 int atender_cpu(void* arg);
+
+int atender_kernel(void* arg);
 
 /**
 * @NAME: atender_cliente
@@ -156,10 +190,23 @@ t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
 
 char* my_itoa(int num);
 
-FILE* archivo_de_swap(char *pid);
+FILE* archivo_de_swap(char *pid, int modo);
 
 void modulo_swap(void* arg);
 
 void crear_modulo_swap(t_log* logger, t_configuraciones* configuraciones,t_queue* cola_suspendidos);
 
+void hilo_a_kernel(void* arg);
+
+t_fila_tabla_paginacion_2doNivel* buscar_frame_libre(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones);
+
+int asignar_pagina_de_memoria();
+
+bool frame_valido(t_list* tabla_segundo_nivel,int marco_solicitado);
+
+t_list* marcos_del_proceso(int nro_tabla_primer_nivel);
+
+bool puede_agregar_marco(int nro_tabla_segundo_nivel,int cant_frames_posibles);
+
+t_fila_tabla_paginacion_2doNivel* ingresar_frame_de_reemplazo(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones,int entrada, int marco,int m);
 #endif

@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include <math.h>
 #include <time.h>
 
 typedef struct configuraciones {
@@ -31,7 +32,26 @@ typedef struct hilo_struct {
     int socket;
     t_log* logger;
     t_configuraciones* configuraciones;
+    t_list* tlb;
 } t_hilo_struct;
+
+typedef struct direccion {
+    int entrada_primer_nivel;
+    int entrada_segundo_nivel;
+    int desplazamiento;
+} t_direccion;
+
+typedef struct pagina{
+    int entrada_primer_nivel;
+    int entrada_segundo_nivel;
+} t_pagina;
+
+typedef struct tlb{
+    time_t  instante_de_carga;
+    time_t  instante_de_ultima_referencia;
+    t_pagina* pagina;
+    int marco;
+} t_fila_tlb;
 
 
 /**
@@ -71,11 +91,13 @@ t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb);
 */
 t_pcb* recibir_pcb(char* buffer);
 
+t_direccion mmu_traduccion(int dir_logica);
+
 /**
-* @NAME: ejecutar_instruccion
+* @NAME: ciclo_de_instruccion
 * @DESC: ejecuta la instrucción que está siendo apuntada por el PC
 */
-int ejecutar_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones);
+int ciclo_de_instruccion(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones,t_list* tlb);
 
 /**
 * @NAME: hay_interrupcion
@@ -93,6 +115,10 @@ int atender_cliente(void* arg);
 */
 int atender_interrupcion(void* arg);
 
-void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket);
+void manejar_conexion_kernel(t_log* logger, t_configuraciones* configuraciones, int socket,t_list* tlb);
+
+t_list* crear_TLB(int cant_entradas);
+
+bool puede_cachear(t_list* tlb);
 
 #endif

@@ -3,14 +3,30 @@
 int pid = 0;
 int procesos_en_memoria = 0;
 int interrupcion_enviada = 0;
+int se_ejecuto_primer_proceso=0;
+int hay_proceso_bloqueado=0;
 
+pthread_mutex_t levantar_socket_mutex;
+pthread_mutex_t se_ejecuto_primer_proceso_mutex;
 pthread_mutex_t interrupcion_enviada_mutex;
+pthread_mutex_t hay_proceso_bloqueado_mutex;
 pthread_mutex_t procesos_en_memoria_mutex;
 pthread_mutex_t pid_mutex;
-pthread_mutex_t conexion_a_memoria_mutex;
+pthread_mutex_t cola_new_mutex;
+pthread_mutex_t cola_exec_mutex;
+pthread_mutex_t cola_ready_mutex;
+pthread_mutex_t cola_blocked_mutex;
+pthread_mutex_t cola_ready_suspended_mutex;
+pthread_mutex_t cola_ready_blocked_mutex;
 
-// Esto es para hacer semaforos binarias cuando hay procesos en swap que pasan a ready 
-pthread_mutex_t swap_mutex;
+//Semaforos de while 1 con condicional
+sem_t planificador_largo_mutex_binario;
+sem_t planificador_corto_binario;
+sem_t planificador_mediano_mutex_binario;
+sem_t cliente_servidor;
+sem_t procesos_bloqueados_binario;
+sem_t blocked_suspended_a_ready_binario;
+
 
 
 
@@ -19,10 +35,19 @@ int main(int argc, char* argv[]) {
 	t_config* config = config_create("./kernel.conf");
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
     leer_config(config,configuraciones);
-	printf("El Algoritmo Planificacion elegido es %s\n",configuraciones->algoritmo_planificacion);
+//	printf("El Algoritmo Planificacion elegido es %s\n",configuraciones->algoritmo_planificacion);
 	t_colas_struct* colas = crear_colas();
 	crear_planificadores(logger,configuraciones,colas);
+
+	sem_init(&planificador_largo_mutex_binario, 0, 0);
+	sem_init(&planificador_corto_binario, 0, 0);
+	sem_init(&planificador_mediano_mutex_binario, 0, 0);
+	sem_init(&cliente_servidor, 0, 1);
+	sem_init(&procesos_bloqueados_binario, 0, 0);
+	sem_init(&blocked_suspended_a_ready_binario, 0, 0);
+
 	int servidor = iniciar_servidor(logger , "Kernel" , "127.0.0.1" , configuraciones->puerto_escucha);
+	setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	manejar_conexion(logger,configuraciones,servidor,colas);
 	liberar_memoria(logger,config,configuraciones,servidor);
 	free(colas);
@@ -33,17 +58,24 @@ void planificador_largo_plazo(void* arg){
 	struct planificador_struct *p;
 	p = (struct planificador_struct*) arg;
 	while(1){
-		sleep(3);
+		sem_wait (&planificador_largo_mutex_binario);
 		if(!queue_is_empty(p->colas->cola_new) && procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
 			int size = queue_size(p->colas->cola_new);
-			printf("La cola NEW tiene %d procesos para planificar\n",size);
+		//	printf("La cola NEW tiene %d procesos para planificar\n",size);
+			log_info(p->logger,"La cola NEW tiene %d procesos para planificar\n",size);
 			t_pcb* pcb = queue_pop(p->colas->cola_new);
-			//iniciar_estructuras(p->logger,p->configuraciones,pcb);
+			pthread_mutex_lock (&cola_ready_mutex);
 			queue_push(p->colas->cola_ready,pcb);
+			iniciar_estructuras(p->logger,p->configuraciones,pcb);
+			pthread_mutex_unlock (&cola_ready_mutex);
 			pthread_mutex_lock (&interrupcion_enviada_mutex);
 			interrupcion_enviada = 0;
 			pthread_mutex_unlock (&interrupcion_enviada_mutex);
-			printf("Se agrego un proceso a la cola READY y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
+			pthread_mutex_lock (&procesos_en_memoria_mutex);
+			procesos_en_memoria++;
+		//	printf("Se agrego un proceso a la cola READY y la cantidad de procesos en memoria ahora es %d\n",++procesos_en_memoria);
+			pthread_mutex_unlock (&procesos_en_memoria_mutex);
+			sem_post (&planificador_corto_binario);
 		}
 	}
 }
@@ -53,53 +85,111 @@ void planificador_corto_plazo(void* arg){
 	p = (struct planificador_struct*) arg;
 	int conexion_interrupt = crear_conexion(p->logger , "CPU Interrup" , p->configuraciones->ip_cpu , p->configuraciones->puerto_cpu_interrupt);
 	while(1){
-		sleep(3);
+		sem_wait (&planificador_corto_binario);
+		pthread_mutex_lock (&cola_exec_mutex);
+		pthread_mutex_lock (&cola_ready_mutex);
 		if(!queue_is_empty(p->colas->cola_ready) && queue_is_empty(p->colas->cola_exec)){
+			pthread_mutex_unlock (&cola_ready_mutex);
+			pthread_mutex_unlock (&cola_exec_mutex);
 			if( strcmp(p->configuraciones->algoritmo_planificacion,"FIFO") == 0 ){
+				pthread_mutex_lock (&cola_ready_mutex);
 				int size = queue_size(p->colas->cola_ready);
+				pthread_mutex_unlock (&cola_ready_mutex);
 				printf("La cola READY tiene %d procesos para ejecutar\n",size);
-			}else{
-				t_queue* aux = queue_create();
-				float aux1,aux2;
-				int size = queue_size(p->colas->cola_ready);
-				printf("La cola READY tiene %d procesos para ejecutar\n",size);
-				if(size > 1){
-					t_pcb* elegido = queue_pop(p->colas->cola_ready);
-				for(int i = 0; i<(size-1); i++){
-					printf("Entro al for por %d vez \n", i);
-
-					aux1 = elegido->alfa * elegido->rafaga_anterior + (1 - elegido->alfa) * elegido->estimacion_inicial;
-					t_pcb* pcb2 = queue_pop(p->colas->cola_ready);
-					aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_inicial;
-
-					if (aux2 > aux1){
-							printf("El pcb %d tiene mas pioridad %f que %d con pioridad %f\n",pcb2->pid,aux2,elegido->pid,aux1);
-							queue_push(aux,pcb2);}
-						
-					else {
-							printf("Un pcb %d tiene mas pioridad %f que %d con pioridad %f\n",elegido->pid,aux1,pcb2->pid,aux2);
-							queue_push(aux,elegido);
-							elegido = pcb2;
-							printf("El elegido pasa a ser %d", elegido->pid);
-						}
-					}
-					queue_push(aux,elegido);
-					p->colas->cola_ready = aux;
-					}
+				pthread_mutex_lock (&cola_ready_mutex);
 				t_pcb* pcb = queue_pop(p->colas->cola_ready);
+				pthread_mutex_unlock (&cola_ready_mutex);
+				pthread_mutex_lock (&cola_exec_mutex);
+				queue_push(p->colas->cola_exec,pcb);
+				pthread_mutex_unlock (&cola_exec_mutex);
 				t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
 				hilo->logger = p->logger;
 				hilo->configuraciones = p->configuraciones;
 				hilo->colas = p->colas;
 				hilo->pcb = pcb;
 				pthread_t hilo_a_cpu;
-				pthread_create (&hilo_a_cpu, NULL , (void*) hilo_enviar_pcb_cpu,(void*) hilo);
+				pthread_create (&hilo_a_cpu, NULL , (void*) enviar_pcb,(void*) hilo);
+				pthread_detach(hilo_a_cpu);
+			}else{
+				t_queue* aux = queue_create();
+				float aux1,aux2;
+				pthread_mutex_lock (&cola_ready_mutex);
+				int size = queue_size(p->colas->cola_ready);
+				pthread_mutex_unlock (&cola_ready_mutex);
+				int estimaciones[p->configuraciones->grado_multiprogramacion];
+				printf("La cola READY tiene %d procesos para ejecutar\n",size);
+				if(size > 1){
+					memset(estimaciones, 0, sizeof estimaciones);
+				for(int j = 0; j < size; j++){
+					pthread_mutex_lock (&cola_ready_mutex);
+					t_pcb* elegido = queue_pop(p->colas->cola_ready);
+					pthread_mutex_unlock (&cola_ready_mutex);
+					for(int i = 0; i < (size-1); i++){
+
+						aux1 = elegido->alfa * elegido->rafaga_anterior + (1 - elegido->alfa) * elegido->estimacion_inicial;
+						pthread_mutex_lock (&cola_ready_mutex);
+						t_pcb* pcb2 = queue_pop(p->colas->cola_ready);
+						pthread_mutex_unlock (&cola_ready_mutex);
+						aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_inicial;
+
+						if (aux1 == aux2){
+						//		printf("Por FIFO tiene mas pioridad %d que %d",elegido->pid,pcb2->pid);
+								estimaciones[i] = aux1;
+								queue_push(aux,elegido);
+								elegido = pcb2;
+						}
+						else if (aux2 < aux1){
+						//		printf("El pcb %d tiene peor estimacion %f que %d con estimacion %f\n",elegido->pid,aux1,pcb2->pid,aux2);
+								estimaciones[i] = aux2;
+								queue_push(aux,pcb2);
+								}
+							
+						else {
+						//		printf("Un pcb %d tiene peor estimacion %f que %d con estimacion %f\n",pcb2->pid,aux2,elegido->pid,aux1);
+								estimaciones[i] = aux1;
+								queue_push(aux,elegido);
+								elegido = pcb2;
+							}
+						}
+						queue_push(aux,elegido);
+						pthread_mutex_lock (&cola_ready_mutex);
+						p->colas->cola_ready = aux;
+						pthread_mutex_unlock (&cola_ready_mutex);
+						}
+					}
+				asignar_estimaciones(estimaciones,p->colas->cola_ready);
+				memset(estimaciones, 0, sizeof estimaciones);
+				pthread_mutex_lock (&cola_ready_mutex);
+				t_pcb* pcb = queue_pop(p->colas->cola_ready);
+				pthread_mutex_unlock (&cola_ready_mutex);
+				pthread_mutex_lock (&cola_exec_mutex);
+				queue_push(p->colas->cola_exec,pcb);
+				pthread_mutex_unlock (&cola_exec_mutex);
+			//	printf("Se agrego un proceso a la cola EXEC\n");
+				t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
+				hilo->logger = p->logger;
+				hilo->configuraciones = p->configuraciones;
+				hilo->colas = p->colas;
+				hilo->pcb = pcb;
+				pthread_mutex_lock (&interrupcion_enviada_mutex);
+				interrupcion_enviada = 1;
+				pthread_mutex_unlock (&interrupcion_enviada_mutex);
+				pthread_t hilo_a_cpu;
+				pthread_create (&hilo_a_cpu, NULL , (void*) enviar_pcb,(void*) hilo);
 				pthread_detach(hilo_a_cpu);
 				}
 				
 			}
+		pthread_mutex_unlock (&cola_ready_mutex);
+		pthread_mutex_unlock (&cola_exec_mutex);
 		pthread_mutex_lock (&interrupcion_enviada_mutex);
-		if (!queue_is_empty(p->colas->cola_ready) && !queue_is_empty(p->colas->cola_exec) && strcmp(p->configuraciones->algoritmo_planificacion,"SRT") == 0 && !interrupcion_enviada){
+		pthread_mutex_lock (&cola_exec_mutex);
+		pthread_mutex_lock (&cola_ready_mutex);
+		pthread_mutex_lock (&se_ejecuto_primer_proceso_mutex);
+		if (!queue_is_empty(p->colas->cola_ready) && !queue_is_empty(p->colas->cola_exec) && strcmp(p->configuraciones->algoritmo_planificacion,"SRT") == 0 && !interrupcion_enviada && se_ejecuto_primer_proceso){
+			pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
+			pthread_mutex_unlock (&cola_ready_mutex);
+			pthread_mutex_unlock (&cola_exec_mutex);
 			pthread_mutex_unlock (&interrupcion_enviada_mutex);
 			log_info(p->logger, "Envio interrupción al cpu");
 			printf("Envio interrupción a cpu\n");
@@ -111,61 +201,195 @@ void planificador_corto_plazo(void* arg){
 			enviar_paquete(paquete,conexion_interrupt);
 			eliminar_paquete(paquete);
 		}
+		pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
+		pthread_mutex_unlock (&cola_ready_mutex);
+		pthread_mutex_unlock (&cola_exec_mutex);
 		pthread_mutex_unlock (&interrupcion_enviada_mutex);
 	}
 }
 
-void hilo_enviar_pcb_cpu(void* arg){
+void asignar_estimaciones(int estimaciones[],t_queue* aux){
+	t_queue* aux2 = queue_create();
+	int aux_size=queue_size(aux);
+	for(int i = aux_size; i < aux_size; i++){
+		t_pcb* pcb = queue_pop(aux);
+		pcb->estimacion_inicial = estimaciones[i];
+	//	printf("Estimacion de pid %d: %d \n",pcb->pid,pcb->estimacion_inicial);
+		queue_push(aux2,pcb);
+	}
+	for(int i = aux_size; i < aux_size; i++){
+		t_pcb* pcb = queue_pop(aux2);
+		queue_push(aux,pcb);
+	}
+}
+
+void enviar_pcb(void* arg){
 	struct hilo_struct_standard_con_pcb *p;
 	p = (struct hilo_struct_standard_con_pcb*) arg;
-	t_pcb* pcb = p->pcb;
-	queue_push(p->colas->cola_exec,pcb);
-	printf("Se agrego un proceso a la cola EXEC\n");
-	enviar_pcb(p->logger,p->configuraciones,pcb,p->colas);
+	t_paquete* paquete = crear_paquete();
+    paquete->codigo_operacion = INICIAR_PROCESO;
+    int cantidad_enteros = list_size(p->pcb->lista_instrucciones);
+    printf("El proceso %d es enviado a cpu\n",p->pcb->pid);
+    agregar_entero_a_paquete(paquete,p->pcb->pid);
+    agregar_entero_a_paquete(paquete,p->pcb->pc);
+    agregar_entero_a_paquete(paquete,cantidad_enteros);
+	agregar_entero_a_paquete(paquete,p->pcb->tabla_paginas);
+    t_list_iterator* iterator = list_iterator_create(p->pcb->lista_instrucciones);
+    while(list_iterator_has_next(iterator)){
+        int ins = list_iterator_next(iterator);
+        agregar_entero_a_paquete(paquete,ins);
+    }
+    list_iterator_destroy(iterator);
+    int conexion = crear_conexion(p->logger , "CPU" , p->configuraciones->ip_cpu ,p->configuraciones->puerto_cpu_dispatch);
+	enviar_paquete(paquete,conexion);
+    eliminar_paquete(paquete);
+	sem_post (&planificador_corto_binario);
+	int codigoOperacion = recibir_operacion(conexion);
+	int size;
+    char * buffer = recibir_buffer(&size, conexion);
+	close(conexion);
+	actualizar_pcb(buffer,p->configuraciones,p->logger,p->colas);
+}
+
+void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger,t_colas_struct* colas){
+	log_info(logger,"Decodificando paquete\n");
+	int pc = leer_entero(buffer,0);
+	int estado = leer_entero(buffer,1);
+	int tiempo_bloqueo = leer_entero(buffer,2);
+	int rafaga_anterior = leer_entero(buffer,3);
+	log_info(logger,"Decodificacion finalizada\n");
+	t_pcb* pcb = queue_pop(colas->cola_exec);
+	pcb->pc=pc;
+	pcb->estado=estado;
+	pcb->tiempo_bloqueo= tiempo_bloqueo;
+	pcb->rafaga_anterior= rafaga_anterior;
+	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
+	pthread_mutex_lock (&se_ejecuto_primer_proceso_mutex);
+	se_ejecuto_primer_proceso = 1;
+	pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
+	if(estado == BLOCKED ){
+	//		printf("El proceso %d pasa a la cola BLOCK\n",pcb->pid);
+			pthread_mutex_lock (&cola_blocked_mutex);
+			queue_push(colas->cola_blocked,pcb);
+			pthread_mutex_unlock (&cola_blocked_mutex);
+			sem_post (&planificador_mediano_mutex_binario);
+	}
+	else if (estado == RUNNING){ // Volvió por una interrupción, entonces hay que meterlo de nuevo a Ready
+		pcb->estado= READY;
+		pthread_mutex_lock (&cola_ready_mutex);
+		queue_push(colas->cola_ready,pcb);
+		pthread_mutex_unlock (&cola_ready_mutex);
+		sem_post (&planificador_corto_binario);
+	}
+	else if (estado == TERMINATED){
+		log_info(logger, "El proceso %d terminó", pcb->pid);
+		pthread_mutex_lock (&procesos_en_memoria_mutex);
+		printf("El proceso %d terminó y la cantidad de procesos en memoria ahora es %d\n", pcb->pid,--procesos_en_memoria);
+		pthread_mutex_unlock (&procesos_en_memoria_mutex);
+		sem_post (&planificador_mediano_mutex_binario);
+		sem_post (&planificador_corto_binario);
+	}
+}
+
+void bloquear_proceso(void* arg){
+	struct planificador_struct *p;
+	p = (struct planificador_struct*) arg;
+	while(1){
+		sem_wait(&procesos_bloqueados_binario);
+		if(!queue_is_empty(p->colas->cola_io)){
+			t_info_bloqueado* info_nuevo_bloqueado = queue_pop(p->colas->cola_io);
+			usleep(info_nuevo_bloqueado->pcb->tiempo_bloqueo * 1000);
+			if(strcmp (info_nuevo_bloqueado->provieneDe,"BLOCK") == 0){
+			//	printf("El proceso %d sale de la cola BLOCK\n",info_nuevo_bloqueado->pcb->pid);
+				pthread_mutex_lock (&cola_ready_mutex);
+				queue_push(p->colas->cola_ready,info_nuevo_bloqueado->pcb);
+				pthread_mutex_unlock (&cola_ready_mutex);
+				sem_post (&planificador_largo_mutex_binario);
+				sem_post (&planificador_corto_binario);
+			}
+			else{
+			//	printf("El proceso %d sale a la cola SUSPENDED-BLOCK\n",info_nuevo_bloqueado->pcb->pid);
+				queue_push(p->colas->cola_ready_suspended,info_nuevo_bloqueado->pcb);
+				sem_post (&planificador_mediano_mutex_binario);
+			}
+		}
+	}
 }
 
 void planificador_mediano_plazo(void* arg){
 	struct planificador_struct *p;
 	p = (struct planificador_struct*) arg;
-	printf("Arrancó planificador de mediano plazo \n");
+	t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
+	hilo->logger = p->logger;
+	hilo->configuraciones = p->configuraciones;
+	hilo->colas = p->colas;
 	while(1){
-		if(!queue_is_empty(p->colas->cola_suspended)){
-			printf("Ingresó un proceso a la cola de suspendidos \n");
-			t_pcb* pcb = queue_pop(p->colas->cola_suspended);
-			t_hilo_struct_standard_con_pcb* hilo = malloc(sizeof(t_hilo_struct_standard_con_pcb));
-			hilo->logger = p->logger;
-			hilo->configuraciones = p->configuraciones;
-			hilo->colas = p->colas;
-			hilo->pcb = pcb;
-			pthread_t hilo_a_memoria;
-			pthread_create (&hilo_a_memoria, NULL , (void*) mandar_y_recibir_confirmacion,(void*) hilo);
-			pthread_detach(hilo_a_memoria);  
+		sem_wait (&planificador_mediano_mutex_binario);
+		pthread_mutex_lock (&cola_blocked_mutex);
+		pthread_mutex_lock (&hay_proceso_bloqueado_mutex);
+		if(!queue_is_empty(p->colas->cola_blocked)){
+			pthread_mutex_unlock (&hay_proceso_bloqueado_mutex);
+			pthread_mutex_unlock (&cola_blocked_mutex);
+		//	printf("Ingresó un proceso a la cola de bloqueados \n");
+			pthread_mutex_lock (&cola_blocked_mutex);
+			t_pcb* pcb = queue_pop(p->colas->cola_blocked);
+			pthread_mutex_unlock (&cola_blocked_mutex);
+			t_info_bloqueado* info_nuevo_bloqueado = malloc(sizeof(t_info_bloqueado));
+			info_nuevo_bloqueado->pcb = pcb;
+			if (pcb->tiempo_bloqueo >= p->configuraciones->tiempo_max_bloqueado){
+			//	printf("El proceso %d pasa a la cola SUSPENDED-BLOCK\n",pcb->pid);
+				info_nuevo_bloqueado->provieneDe = "SUSPENDED-BLOCK";
+				t_paquete* paquete = crear_paquete();
+				paquete->codigo_operacion = ENVIAR_A_SWAP;
+				int conexion = crear_conexion(p->logger , "Memoria" , p->configuraciones->ip_memoria ,p->configuraciones->puerto_memoria);
+				agregar_entero_a_paquete(paquete,pcb->pid);
+				agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
+				enviar_paquete(paquete,conexion);
+				pthread_mutex_lock (&procesos_en_memoria_mutex);
+				procesos_en_memoria--;
+				pthread_mutex_unlock (&procesos_en_memoria_mutex);
+				int codigoOperacion = recibir_operacion(conexion);
+				eliminar_paquete(paquete);
+				int size;
+				char * buffer = recibir_buffer(&size, conexion);
+				close(conexion);
+				queue_push(p->colas->cola_io,info_nuevo_bloqueado);
+				sem_post (&planificador_largo_mutex_binario);
+				sem_post (&planificador_corto_binario);
+				
+			}
+			else{
+				info_nuevo_bloqueado->provieneDe = "BLOCK";
+				queue_push(p->colas->cola_io,info_nuevo_bloqueado);
+				sem_post (&planificador_corto_binario);
+			}
+			sem_post(&procesos_bloqueados_binario);
 		}
+		pthread_mutex_unlock (&hay_proceso_bloqueado_mutex);
+		pthread_mutex_unlock (&cola_blocked_mutex);
+		if(!queue_is_empty(p->colas->cola_ready_suspended)){
+			pthread_mutex_lock(&procesos_en_memoria_mutex);
+			if (procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
+				t_pcb* pcb = queue_pop(p->colas->cola_ready_suspended);
+				pthread_mutex_unlock (&procesos_en_memoria_mutex);
+			//	printf("Sale de la cola READY SUSPENDED a READY\n");
+				pthread_mutex_lock (&cola_ready_mutex);
+				queue_push(p->colas->cola_ready,pcb);
+				pthread_mutex_unlock (&cola_ready_mutex);
+				pthread_mutex_lock(&procesos_en_memoria_mutex);
+				procesos_en_memoria++;
+				pthread_mutex_unlock(&procesos_en_memoria_mutex);
+				pthread_mutex_lock (&interrupcion_enviada_mutex);
+				interrupcion_enviada = 0;
+				pthread_mutex_unlock (&interrupcion_enviada_mutex);
+				sem_post (&planificador_corto_binario);	
+			}
+			pthread_mutex_unlock (&procesos_en_memoria_mutex);
+		}
+		sem_post (&planificador_largo_mutex_binario);
 	}
 }
 
-int mandar_y_recibir_confirmacion(void* arg){
-	struct hilo_struct_standard_con_pcb *p;
-	p = (struct t_hilo_struct_standard_con_pcb*) arg;
-	t_pcb* pcb = p->pcb;
-	printf("El proceso %d es enviado a memoria \n",pcb->pid);
-	t_paquete* paquete = crear_paquete();
-	paquete->codigo_operacion = ENVIAR_A_SWAP;
-	int conexion = crear_conexion(p->logger , "Memoria" , p->configuraciones->ip_memoria ,p->configuraciones->puerto_memoria);
-	agregar_entero_a_paquete(paquete,pcb->pid);
-	agregar_entero_a_paquete(paquete,pcb->tiempo_bloqueo);
-	enviar_paquete(paquete,conexion);
-	eliminar_paquete(paquete);
-	int codigoOperacion = recibir_operacion(conexion);
-	int size;
-	char * buffer = recibir_buffer(&size, conexion);
-	printf("El proceso %d sale de la cola SUSPENDED-BLOCK\n",pcb->pid);
-	if (procesos_en_memoria<p->configuraciones->grado_multiprogramacion)
-	queue_push(p->colas->cola_ready,pcb);
-	pthread_mutex_lock (&interrupcion_enviada_mutex);
-	interrupcion_enviada = 0;
-	pthread_mutex_unlock (&interrupcion_enviada_mutex);
-}
 
 
 
@@ -174,11 +398,17 @@ t_colas_struct* crear_colas(){
 	t_queue* cola_new = queue_create();
 	t_queue* cola_ready = queue_create();
 	t_queue* cola_exec = queue_create();
-	t_queue* cola_suspended = queue_create();
+	t_queue* cola_blocked = queue_create();
+	t_queue* cola_ready_suspended = queue_create();
+	t_queue* cola_blocked_suspended = queue_create();
+	t_queue* cola_io = queue_create();
 	colas->cola_new = cola_new;
 	colas->cola_ready = cola_ready;
 	colas->cola_exec = cola_exec;
-	colas->cola_suspended = cola_suspended;
+	colas->cola_blocked = cola_blocked;
+	colas->cola_ready_suspended = cola_ready_suspended;
+	colas->cola_blocked_suspended = cola_blocked_suspended;
+	colas->cola_io = cola_io;
 	return colas;
 }
 
@@ -196,149 +426,15 @@ void crear_planificadores(t_log* logger, t_configuraciones* configuraciones,t_co
 	pthread_t hilo_planificador_mediano_plazo;
     pthread_create (&hilo_planificador_mediano_plazo, NULL , (void*) planificador_mediano_plazo,(void*) planificador);
     pthread_detach(hilo_planificador_mediano_plazo);
+	pthread_t hilo_bloquear_proceso;
+    pthread_create (&hilo_bloquear_proceso, NULL , (void*) bloquear_proceso,(void*) planificador);
+    pthread_detach(hilo_bloquear_proceso);
 }
 
-void iniciar_estructuras(t_log* logger, t_configuraciones* configuraciones, t_pcb* pcb){
-	t_paquete* paquete = crear_paquete();
-   	paquete->codigo_operacion = INICIAR_ESTRUCTURAS;
-	agregar_entero_a_paquete(paquete,pcb->pid);
-	int conexion = crear_conexion(logger , "Conexion con memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
-	enviar_paquete(paquete,conexion);
-	eliminar_paquete(paquete);
-	pthread_mutex_lock (&conexion_a_memoria_mutex);
-	int codigoOperacion = recibir_operacion(conexion);
-	pthread_mutex_unlock (&conexion_a_memoria_mutex);
-	int size;
-    char * buffer = recibir_buffer(&size, conexion);
-	close(conexion);
-	int tabla_paginas = leer_entero(buffer,0);
-	pcb->tabla_paginas = tabla_paginas;
-}
-void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb,t_colas_struct* colas){
-	t_paquete* paquete = crear_paquete();
-    paquete->codigo_operacion = INICIAR_PROCESO;
-    int cantidad_enteros = list_size(pcb->lista_instrucciones);
-    printf("El proceso %d es enviado a cpu\n",pcb->pid);
-    agregar_entero_a_paquete(paquete,pcb->pid);
-    agregar_entero_a_paquete(paquete,pcb->pc);
-    agregar_entero_a_paquete(paquete,cantidad_enteros);
-    t_list_iterator* iterator = list_iterator_create(pcb->lista_instrucciones);
-    while(list_iterator_has_next(iterator)){
-        int ins = list_iterator_next(iterator);
-        agregar_entero_a_paquete(paquete,ins);
-    }
-    list_iterator_destroy(iterator);
-    int conexion = crear_conexion(logger , "CPU" , configuraciones->ip_cpu ,configuraciones->puerto_cpu_dispatch);
-	enviar_paquete(paquete,conexion);
-    eliminar_paquete(paquete);
-	int valor_semaforo;
-	int codigoOperacion = recibir_operacion(conexion);
-	int size;
-    char * buffer = recibir_buffer(&size, conexion);
-	actualizar_pcb(buffer,configuraciones,logger,colas);
-}
-
-void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger,t_colas_struct* colas){
-	log_info(logger,"Decodificando paquete\n");
-	int pc = leer_entero(buffer,0);
-	int estado = leer_entero(buffer,1);
-	int tiempo_bloqueo = leer_entero(buffer,2);
-	int rafaga_anterior = leer_entero(buffer,3);
-	log_info(logger,"Decodificacion finalizada\n");
-	t_pcb* pcb = queue_pop(colas->cola_exec);
-	pcb->pc=pc;
-	pcb->estado=estado;
-	pcb->tiempo_bloqueo= tiempo_bloqueo;
-	pcb->rafaga_anterior=rafaga_anterior;
-	log_info(logger,"El proceso %d tiene estado %d",pcb->pid,estado);
-	if(estado == BLOCKED ){
-			printf("El proceso %d pasa a la cola BLOCK\n",pcb->pid);
-			if (pcb->tiempo_bloqueo >= configuraciones->tiempo_max_bloqueado){
-				printf("El proceso %d pasa a la cola SUSPENDED-BLOCK\n",pcb->pid);
-				queue_push(colas->cola_suspended,pcb);
-			}
-			else{
-				usleep(20);
-				printf("El proceso %d sale de la cola BLOCK\n",pcb->pid);
-				queue_push(colas->cola_ready,pcb);
-			}
-		}
-	else if (estado == RUNNING){ // Volvió por una interrupción, entonces hay que meterlo de nuevo a Ready
-		pcb->estado= READY;
-		queue_push(colas->cola_ready,pcb);
-	}
-	else if (estado == TERMINATED){
-		log_info(logger, "El proceso %d terminó", pcb->pid);
-		printf("El proceso %d terminó y la cantidad de procesos en memoria ahora es %d\n", pcb->pid,--procesos_en_memoria);
-	}
-}
-
-int atender_cliente(void* arg){
-	struct hilo_struct *p;
-	p = (struct hilo_struct*) arg;
-	while (1){
-		int cod_op = recibir_operacion(p->socket);
-		switch (cod_op) {
-		case MENSAJE:
-			recibir_mensaje(p->socket , p->logger);
-			break;
-		case INICIAR_PROCESO:
-			iniciar_proceso(p->logger,p->socket,p->configuraciones,p->colas->cola_new);
-			break;
-		case -1:
-			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");
-			return EXIT_FAILURE;
-		default:
-			log_warning(p->logger,"Operacion desconocida");
-			break;
-		}
-	}
-	return EXIT_SUCCESS;	
-}
-
-void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_colas_struct* colas){
-   	while(1){
-        int client_socket = esperar_cliente(logger,"CPU",socket);
-		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
-		hilo->logger = logger;
-		hilo->socket = client_socket;
-		hilo->configuraciones = configuraciones;
-		hilo->colas = colas;
-        pthread_t hilo_servidor;
-        pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
-        pthread_detach(hilo_servidor);  
-    }	
-}
-
-int atender_cpu(void* arg){
-	struct hilo_struct *p;
-	p = (struct hilo_struct*) arg;
-	while (1){
-		int cod_op = recibir_operacion(p->socket);
-		switch (cod_op) {
-		case MENSAJE:
-			recibir_mensaje(p->socket , p->logger);
-			break;
-		case -1:
-			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");
-			return EXIT_FAILURE;
-		default:
-			log_warning(p->logger,"Operacion desconocida");
-			break;
-		}
-	}
-	return EXIT_SUCCESS;
-}
-
-void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones,t_queue* cola_new){
-	log_info(logger,"Recibi un INICIAR_PROCESO desde consola\n");	
-	int size;
-   	char * buffer = recibir_buffer(&size, client_socket);
-	t_pcb* pcb  = crear_pcb(buffer,configuraciones,logger);
-	log_info(logger,"Se creo el PCB con Process Id: %d y Tamaño: %d\n",pcb->pid,pcb->size);
-	printf("Se agrego un proceso a la cola NEW\n");
+void iniciar_estructuras(t_log* logger,t_configuraciones* configuraciones,t_pcb* pcb){
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = INICIAR_PROCESO;
+//	printf("Mando estructuras a memoria\n");
 	int conexion = crear_conexion(logger , "Memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	int cantidad_enteros = list_size(pcb->lista_instrucciones);
@@ -356,16 +452,78 @@ void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configu
         agregar_entero_a_paquete(paquete,ins);
     }
     list_iterator_destroy(iterator);
+	sem_wait(&cliente_servidor);
 	enviar_paquete(paquete,conexion);
 	eliminar_paquete(paquete);
-	pthread_mutex_lock (&conexion_a_memoria_mutex);
 	int codigoOperacion = recibir_operacion(conexion);
-	pthread_mutex_unlock (&conexion_a_memoria_mutex);
-	buffer = recibir_buffer(&size, conexion);
-	int direccion_logica = leer_entero(buffer,1);
-	printf("Termine de recibirlo\n");
-	printf("El proceso %d tiene la dirección: %d\n",pcb->pid,direccion_logica);
+	sem_post(&cliente_servidor);
+	int size;
+	char* buffer = recibir_buffer(&size, conexion);
+	close(conexion);
+	if(leer_entero(buffer,0) < 0){
+		printf("Falló al iniciar pcb\n");
+		free(pcb);
+	}
+	else{
+		int entrada_tabla_primer_nivel = leer_entero(buffer,1);
+	//	printf("Termine de recibirlo\n");
+	//	printf("El proceso %d tiene la entrada de tabla de primer nivel: %d\n",pcb->pid,entrada_tabla_primer_nivel);
+	//	printf("Se agrego un proceso a la cola NEW\n");
+		pcb->tabla_paginas = entrada_tabla_primer_nivel;
+	}
+}
+
+
+int atender_cliente(void* arg){
+	struct hilo_struct *p;
+	p = (struct hilo_struct*) arg;
+	while (1){
+		int cod_op = recibir_operacion(p->socket);
+		switch (cod_op) {
+		case MENSAJE:
+			recibir_mensaje(p->socket , p->logger);
+			break;
+		case INICIAR_PROCESO:
+			iniciar_proceso(p->logger,p->socket,p->configuraciones,p->colas->cola_new);
+			close(p->socket);
+			pthread_exit(NULL);
+			break;
+		case -1:
+			log_info(p->logger, "El cliente se desconecto. Terminando el hilo");
+			return EXIT_FAILURE;
+		default:
+			log_warning(p->logger,"Operacion desconocida");
+			break;
+		}
+	}
+	return EXIT_SUCCESS;	
+}
+
+void manejar_conexion(t_log* logger, t_configuraciones* configuraciones, int socket,t_colas_struct* colas){
+	while(1){
+		//pthread_mutex_lock(&levantar_socket_mutex);
+        int client_socket = esperar_cliente(logger,"Kernel",socket);
+		//pthread_mutex_unlock(&levantar_socket_mutex);
+		t_hilo_struct* hilo = malloc(sizeof(t_hilo_struct));
+		hilo->logger = logger;
+		hilo->socket = client_socket;
+		hilo->configuraciones = configuraciones;
+		hilo->colas = colas;
+        pthread_t hilo_servidor;
+        pthread_create (&hilo_servidor, NULL , (void*) atender_cliente,(void*) hilo);
+        pthread_detach(hilo_servidor);  
+    }	
+}
+void iniciar_proceso(t_log* logger,int client_socket, t_configuraciones* configuraciones,t_queue* cola_new){
+	log_info(logger,"Recibi un INICIAR_PROCESO desde consola\n");	
+	int size;
+   	char * buffer = recibir_buffer(&size, client_socket);
+	t_pcb* pcb  = crear_pcb(buffer,configuraciones,logger);
+	log_info(logger,"Se creo el PCB con Process Id: %d y Tamaño: %d\n",pcb->pid,pcb->size);
+	pthread_mutex_lock(&cola_new_mutex);
 	queue_push(cola_new,pcb);
+	pthread_mutex_unlock(&cola_new_mutex);
+	sem_post (&planificador_largo_mutex_binario);
 }
 
 t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger){

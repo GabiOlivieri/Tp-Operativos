@@ -35,8 +35,16 @@ typedef struct colas_struct {
     t_queue* cola_new;
     t_queue* cola_ready;
     t_queue* cola_exec;
-    t_queue* cola_suspended;
+    t_queue* cola_blocked;
+    t_queue* cola_ready_suspended;
+    t_queue* cola_blocked_suspended;
+    t_queue* cola_io;
 } t_colas_struct;
+
+typedef struct info_bloqueado{
+    t_pcb* pcb;
+    char *provieneDe;
+} t_info_bloqueado;
 
 typedef struct hilo_struct {
     int socket;
@@ -77,7 +85,7 @@ t_pcb* crear_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logger);
 * @NAME: enviar_pcb
 * @DESC: Envia el pcb recibido a cpu
 */
-void enviar_pcb(t_log* logger, t_configuraciones* configuraciones,t_pcb* pcb,t_colas_struct* colas);
+void enviar_pcb(void* arg);
 
 /**
 * @NAME: manejar_conexion

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 DIR=/home/utnso/tp-2022-1c-Champagne-SO
-rm $DIR/cpu/cpu.log
-rm $DIR/kernel/kernel.log
-rm $DIR/memoria/memoria.log
-rm $DIR/Consola/consola.log
+> $DIR/cpu/cpu.log
+> $DIR/kernel/kernel.log
+> $DIR/memoria/memoria.log
+> $DIR/Consola/consola.log
