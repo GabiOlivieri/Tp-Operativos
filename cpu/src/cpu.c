@@ -279,8 +279,12 @@ int atender_cliente(void* arg){
     			instruccion = ciclo_de_instruccion(p->logger,pcb,p->configuraciones,p->tlb);
 				if(instruccion == NO_OP)
 				contador = contador + (p->configuraciones->retardo_NOOP );
-				else
-				contador = contador + 1000;
+				else if (instruccion == IO){
+					break;
+				}
+				else{
+					contador = contador + 1000;
+				}
 				}
 				pthread_mutex_unlock (&interrupcion_mutex);
 				pthread_mutex_lock (&interrupcion_mutex);

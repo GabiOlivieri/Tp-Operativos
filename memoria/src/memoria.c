@@ -442,15 +442,16 @@ void liberar_memoria_de_proceso(int pid, t_configuraciones* configuraciones,int 
 		t_list_iterator* iterator_segundo_nivel = list_iterator_create(tabla_segundo_nivel);
 		while(list_iterator_has_next(iterator_segundo_nivel)){
 			t_fila_tabla_paginacion_2doNivel* fila_segundo_nivel = list_iterator_next(iterator_segundo_nivel);	
-			
-			for(int i = 0; i < configuraciones->tam_pagina ; i++ ){
-			pthread_mutex_lock(&escribir_en_memoria);
-			((uint32_t *)espacio_Contiguo_En_Memoria)[fila_segundo_nivel->marco * configuraciones->tam_pagina + i] = NULL;
-			pthread_mutex_unlock(&escribir_en_memoria);
+			if(fila_segundo_nivel->p == 1){
+				for(int i = 0; i < configuraciones->tam_pagina ; i++ ){
+				pthread_mutex_lock(&escribir_en_memoria);
+				((uint32_t *)espacio_Contiguo_En_Memoria)[fila_segundo_nivel->marco * configuraciones->tam_pagina + i] = NULL;
+				pthread_mutex_unlock(&escribir_en_memoria);
+				}
+				pthread_mutex_lock(&bitmap_memoria_mutex);
+				bitarray_clean_bit(bitmap_memoria,fila_segundo_nivel->marco);
+				pthread_mutex_unlock(&bitmap_memoria_mutex);
 			}
-			pthread_mutex_lock(&bitmap_memoria_mutex);
-			bitarray_clean_bit(bitmap_memoria,fila_segundo_nivel->marco);
-			pthread_mutex_unlock(&bitmap_memoria_mutex);
 		}
 	}
 	pthread_mutex_unlock(&tabla_primer_nivel_mutex);
@@ -596,7 +597,7 @@ int atender_cliente(void* arg){
 								}
 							else{
 								if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso)){
-								  marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones);
+								  marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones);
 								}
 								else { marco = buscar_marco_libre_en_memoria();}
 								sem_wait(&swap_mutex_binario);
@@ -634,7 +635,7 @@ int atender_cliente(void* arg){
 								}
 							else{
 								if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso)){
-								  marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones);
+								  marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones);
 								}
 								else { marco = buscar_marco_libre_en_memoria();}
 								sem_wait(&swap_mutex_binario);
