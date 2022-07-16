@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
 
 
 
-    int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
+    int servidor = iniciar_servidor(logger , "CPU Dispatch" , configuraciones->ip_propia , configuraciones->puerto_escucha_dispatch);
     setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	manejar_interrupciones(logger,configuraciones);
 	manejar_conexion_kernel(logger,configuraciones,servidor,tlb);
@@ -581,6 +581,7 @@ t_list* obtener_lista_instrucciones(char* buffer, t_pcb* pcb){
 
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
+	configuraciones->ip_propia = config_get_string_value(config , "IP_PROPIA");
 	configuraciones->entradas_TLB = config_get_int_value(config , "ENTRADAS_TLB");
 	configuraciones->reemplazo_TLB = config_get_string_value(config , "REEMPLAZO_TLB");
 	configuraciones->retardo_NOOP = config_get_int_value(config , "RETARDO_NOOP");
