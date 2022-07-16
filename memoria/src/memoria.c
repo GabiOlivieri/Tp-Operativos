@@ -525,15 +525,9 @@ int atender_cliente(void* arg){
 	while (1){
 		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {
-    		case MENSAJE:
-    			recibir_mensaje(p->socket , p->logger);
-    			break;
-    		case PAQUETE:
-    			log_info(p->logger, "Me llegaron los siguientes valores:\n");
-    			break;
 
 			case PRIMER_ACCESO_A_MEMORIA:
-			//	printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
+				printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				pthread_mutex_lock(&pid_en_cpu_mutex);
@@ -557,7 +551,7 @@ int atender_cliente(void* arg){
 				break;
 
 			case SEGUNDO_ACCESSO_A_MEMORIA:
-			//	printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
+				printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				pthread_mutex_lock(&pid_en_cpu_mutex);
@@ -686,7 +680,7 @@ int atender_cliente(void* arg){
 				break;
 			
 			case TERCER_ACCESSO_A_MEMORIA:
-			//	printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
+				printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				pthread_mutex_lock(&pid_en_cpu_mutex);
@@ -697,14 +691,16 @@ int atender_cliente(void* arg){
 				operacion = leer_entero(buffer,3);
 				uint32_t valor;
 				if ( desplazamiento > p->configuraciones->tam_pagina)
-					//printf("Seg Fault\n");
+					printf("Seg Fault\n");
 				switch(operacion){
 					case READ:
 					printf("leo el valor %d de la dir %d \n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento],marco * p->configuraciones->tam_pagina + desplazamiento);
+					log_info(p->logger,"leo el valor %d de la dir %d \n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento],marco * p->configuraciones->tam_pagina + desplazamiento);
 						break;
 					case WRITE:
 						valor = leer_entero(buffer,4);
 						printf("Escribo en la dir : %d \n",marco * p->configuraciones->tam_pagina + desplazamiento);
+						log_info(p->logger,"Escribo en la dir : %d \n",marco * p->configuraciones->tam_pagina + desplazamiento);
 						pthread_mutex_lock(&escribir_en_memoria);
 						((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento] = valor;
 						pthread_mutex_unlock(&escribir_en_memoria);
