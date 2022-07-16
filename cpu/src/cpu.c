@@ -15,10 +15,10 @@ pthread_mutex_t tlb_entrada_segundo_nivel_mutex;
 
 
 
-int main(int argc, char* argv[]) {
+int main(int argc, char** argv) {
     t_log* logger = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
 	logger_debug = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
-    t_config* config = config_create("./cpu.conf");
+    t_config* config = config_create(argv[1]);
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
     leer_config(config,configuraciones);
@@ -269,13 +269,18 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
     			int instruccion=0;
     			int size;
+				int contador=0;
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
-				clock_t begin = clock();
+		//		clock_t begin = clock();
 				pthread_mutex_lock (&interrupcion_mutex);
        			while (!interrupcion && instruccion != EXIT && instruccion != IO){
 				pthread_mutex_unlock (&interrupcion_mutex);
     			instruccion = ciclo_de_instruccion(p->logger,pcb,p->configuraciones,p->tlb);
+				if(instruccion == NO_OP)
+				contador = contador + (p->configuraciones->retardo_NOOP );
+				else
+				contador = contador + 1000;
 				}
 				pthread_mutex_unlock (&interrupcion_mutex);
 				pthread_mutex_lock (&interrupcion_mutex);
@@ -284,10 +289,10 @@ int atender_cliente(void* arg){
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
 				pthread_mutex_unlock (&interrupcion_mutex);
-				clock_t end = clock();
-				double rafaga = (double)(end - begin) / CLOCKS_PER_SEC;
-				printf("Hizo %f rafagas\n", rafaga * 1000000 );
-				pcb->rafaga_anterior= rafaga * 1000000;
+		//		clock_t end = clock();
+		//		double rafaga = (double)(end - begin) / CLOCKS_PER_SEC;
+				printf("Hizo %d rafagas\n", contador );
+				pcb->rafaga_anterior= contador;
 				limpiar_TLB(p->tlb);
        			devolver_pcb(pcb,p->logger,p->socket);
 				close(p->socket);

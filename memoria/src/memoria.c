@@ -41,9 +41,9 @@ sem_t swap_mutex_binario;
 
 
 
-int main(int argc, char* argv[]) {
+int main(int argc, char** argv) {
     t_log* logger = log_create("./memoria.log","MEMORIA", false , LOG_LEVEL_TRACE);
-    t_config* config = config_create("./memoria.conf");
+    t_config* config = config_create(argv[1]);
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
     leer_config(config,configuraciones);
@@ -967,7 +967,7 @@ FILE* archivo_de_swap(char pid[],int modo){
 		strcat(path, barra);
 		strcat(path, pid);
 		strcat(path, extension);
-		printf("%s\n", path);
+	//	printf("%s\n", path);
 		if(modo){
 			return fopen(path, "w+");
 		}else{
