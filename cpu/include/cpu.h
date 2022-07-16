@@ -18,6 +18,7 @@
 #include <time.h>
 
 typedef struct configuraciones {
+    char *ip_propia;
     char *ip_memoria;
     char *puerto_memoria;
     u_int16_t entradas_TLB;
