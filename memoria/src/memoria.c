@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
 	init_memoria(configuraciones,logger);
 
 
-    int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
+    int servidor = iniciar_servidor(logger , "Memoria" , configuraciones->ip_propia , configuraciones->puerto_escucha);
     setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	crear_modulo_swap(logger,configuraciones,cola_suspendidos);
 	hilo_para_kernel(logger,configuraciones,cola_procesos_a_crear);
@@ -1274,6 +1274,7 @@ t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
 }
 
 void leer_config(t_config* config, t_configuraciones* configuraciones){
+	configuraciones->ip_propia = config_get_string_value(config , "IP_PROPIA");
 	configuraciones->puerto_escucha = config_get_string_value(config , "PUERTO_ESCUCHA");
 	configuraciones->tam_memoria = config_get_int_value(config , "TAM_MEMORIA");
 	configuraciones->tam_pagina = config_get_int_value(config , "TAM_PAGINA");
