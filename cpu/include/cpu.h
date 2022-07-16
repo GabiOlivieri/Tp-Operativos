@@ -26,6 +26,7 @@ typedef struct configuraciones {
     u_int16_t retardo_NOOP;
     char *puerto_escucha_dispatch;
     char *puerto_escucha_interrupt;
+    char *ip_local;
 } t_configuraciones;
 
 typedef struct hilo_struct {

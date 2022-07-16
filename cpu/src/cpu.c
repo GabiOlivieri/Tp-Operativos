@@ -15,10 +15,10 @@ pthread_mutex_t tlb_entrada_segundo_nivel_mutex;
 
 
 
-int main(int argc, char* argv[]) {
+int main(int argc, char** argv) {
     t_log* logger = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
 	logger_debug = log_create("./cpu.log","CPU", false , LOG_LEVEL_TRACE);
-    t_config* config = config_create("./cpu.conf");
+    t_config* config = config_create(argv[1]);
     t_configuraciones* configuraciones = malloc(sizeof(t_configuraciones));
 
     leer_config(config,configuraciones);
@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
 
 
-    int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
+    int servidor = iniciar_servidor(logger , "CPU Dispatch" , configuraciones->ip_local , configuraciones->puerto_escucha_dispatch);
     setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	manejar_interrupciones(logger,configuraciones);
 	manejar_conexion_kernel(logger,configuraciones,servidor,tlb);
@@ -202,7 +202,7 @@ bool puede_cachear(t_list* tlb){
 }
 
 void manejar_interrupciones(t_log* logger, t_configuraciones* configuraciones){
-	int servidor = iniciar_servidor(logger , "CPU Interrupt" , "127.0.0.1" , configuraciones->puerto_escucha_interrupt);
+	int servidor = iniciar_servidor(logger , "CPU Interrupt" , configuraciones->ip_local , configuraciones->puerto_escucha_interrupt);
    	int client_socket_interrupt = esperar_cliente(logger , "CPU Interrupt" , servidor);
 	t_hilo_struct* hilox = malloc(sizeof(t_hilo_struct));
 	hilox->logger = logger;
@@ -269,13 +269,22 @@ int atender_cliente(void* arg){
     			log_info(p->logger, "Me llego un INICIAR_PROCESO\n");
     			int instruccion=0;
     			int size;
+				int contador=0;
        			char * buffer = recibir_buffer(&size, p->socket);
        			t_pcb* pcb = recibir_pcb(buffer);
-				clock_t begin = clock();
+		//		clock_t begin = clock();
 				pthread_mutex_lock (&interrupcion_mutex);
        			while (!interrupcion && instruccion != EXIT && instruccion != IO){
 				pthread_mutex_unlock (&interrupcion_mutex);
     			instruccion = ciclo_de_instruccion(p->logger,pcb,p->configuraciones,p->tlb);
+				if(instruccion == NO_OP)
+				contador = contador + (p->configuraciones->retardo_NOOP );
+				else if (instruccion == IO){
+					break;
+				}
+				else{
+					contador = contador + 1000;
+				}
 				}
 				pthread_mutex_unlock (&interrupcion_mutex);
 				pthread_mutex_lock (&interrupcion_mutex);
@@ -284,10 +293,10 @@ int atender_cliente(void* arg){
 				pthread_mutex_lock (&interrupcion_mutex);
 				interrupcion=0;
 				pthread_mutex_unlock (&interrupcion_mutex);
-				clock_t end = clock();
-				double rafaga = (double)(end - begin) / CLOCKS_PER_SEC;
-				printf("Hizo %f rafagas\n", rafaga * 1000000 );
-				pcb->rafaga_anterior= rafaga * 1000000;
+		//		clock_t end = clock();
+		//		double rafaga = (double)(end - begin) / CLOCKS_PER_SEC;
+				printf("Hizo %d rafagas\n", contador );
+				pcb->rafaga_anterior= contador;
 				limpiar_TLB(p->tlb);
        			devolver_pcb(pcb,p->logger,p->socket);
 				close(p->socket);
@@ -313,6 +322,7 @@ void notificar_fin(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones,t
 	paquete->codigo_operacion = FINALIZAR_PROCESO;
 	printf("Notifico fin de proceso \n" );
 	log_info(logger, "Fin de proceso\n");
+	agregar_entero_a_paquete(paquete,pcb->pid);
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
@@ -583,6 +593,7 @@ void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->puerto_memoria = config_get_string_value(config , "PUERTO_MEMORIA");
 	configuraciones->puerto_escucha_dispatch = config_get_string_value(config , "PUERTO_ESCUCHA_DISPATCH");
 	configuraciones->puerto_escucha_interrupt = config_get_string_value(config , "PUERTO_ESCUCHA_INTERRUPT");
+	configuraciones->ip_local = config_get_string_value(config , "IP_LOCAL");
 }
 
 void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* configuraciones , int servidor){

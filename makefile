@@ -1,5 +1,6 @@
 COMMONS= ./instalar_commons.sh
-REPOSITORIO= ./scripts/clonar_repositorio.sh
+MAKER= ./scripts/makeAllFiles.sh
+PRUEBAS = ./scripts/clonar_pruebas.sh
 
-champagne:
-	/bin/sh $(COMMONS) && /bin/sh $(REPOSITORIO)
+deploy:
+	/bin/sh $(COMMONS) && /bin/sh $(MAKER) && /bin/sh $(PRUEBAS) 
