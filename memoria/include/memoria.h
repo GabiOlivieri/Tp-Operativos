@@ -19,6 +19,7 @@
 
 
 typedef struct configuraciones {
+    char *ip_propia;
     char *puerto_escucha;
     u_int16_t tam_memoria;
     u_int16_t tam_pagina;
