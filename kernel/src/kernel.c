@@ -289,6 +289,14 @@ void actualizar_pcb(char* buffer,t_configuraciones* configuraciones,t_log* logge
 		printf("El proceso %d terminó y la cantidad de procesos en memoria ahora es %d\n", pcb->pid,--procesos_en_memoria);
 		//log_info(logger,"El proceso %d terminó y la cantidad de procesos en memoria ahora es %d\n", pcb->pid,--procesos_en_memoria);
 		pthread_mutex_unlock (&procesos_en_memoria_mutex);
+		pthread_mutex_lock (&se_ejecuto_primer_proceso_mutex);
+		if(procesos_en_memoria == 0){
+			pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
+			pthread_mutex_lock (&se_ejecuto_primer_proceso_mutex);
+			se_ejecuto_primer_proceso = 0;
+			pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
+		}
+		pthread_mutex_unlock (&se_ejecuto_primer_proceso_mutex);
 		sem_post (&planificador_mediano_mutex_binario);
 		sem_post (&planificador_corto_binario);
 	}
