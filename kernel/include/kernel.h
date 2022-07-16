@@ -18,6 +18,7 @@
 
 
 typedef struct configuraciones {
+    char *ip_propia;
     char *ip_memoria;
     char * puerto_memoria;
     char *ip_cpu;
