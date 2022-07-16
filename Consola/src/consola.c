@@ -100,7 +100,7 @@ void enviar_instrucciones(t_list* lista, t_log* logger,t_nombre* nombre,char* ar
         agregar_entero_a_paquete(paquete,ins);
     }
     list_iterator_destroy(iterator);
-    int conexion = crear_conexion(logger , "SERVER PLATA Y MIEDO NUNCA TUVE" , nombre->ip_kernel ,nombre->puerto_kernel);
+    int conexion = crear_conexion(logger , "Kernel" , nombre->ip_kernel ,nombre->puerto_kernel);
     enviar_paquete(paquete,conexion);
     eliminar_paquete(paquete);
     close(conexion);   

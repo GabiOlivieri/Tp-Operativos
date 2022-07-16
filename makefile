@@ -1,5 +1,6 @@
 COMMONS= ./instalar_commons.sh
 REPOSITORIO= ./scripts/clonar_repositorio.sh
+ACTUALIZADOR= ./actualizar_ips_locales.sh
 
-champagne:
-	/bin/sh $(COMMONS) && /bin/sh $(REPOSITORIO)
+deploy:
+	/bin/sh $(COMMONS) && /bin/sh $(REPOSITORIO) && /bin/sh $(ACTUALIZADOR)

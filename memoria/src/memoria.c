@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
 	init_memoria(configuraciones,logger);
 
 
-    int servidor = iniciar_servidor(logger , "Memoria" , "127.0.0.1" , configuraciones->puerto_escucha);
+    int servidor = iniciar_servidor(logger , "Memoria" , configuraciones->ip_local , configuraciones->puerto_escucha);
     setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	crear_modulo_swap(logger,configuraciones,cola_suspendidos);
 	hilo_para_kernel(logger,configuraciones,cola_procesos_a_crear);
@@ -427,30 +427,33 @@ void limpiar_swap(int pid){
 	remove(path);
 }
 
-void liberar_memoria_de_proceso(int pid){
-	char pidchar[5];
-	sprintf(pidchar, "%d", pid);
-	FILE* fp = archivo_de_swap(pidchar,0);
-	t_escritura_swap* swap = malloc(sizeof(t_escritura_swap));
-	size_t resultado;
-	while (!feof(fp)){
-   		 resultado = fread(swap, sizeof(t_escritura_swap), 1, fp);
-		if (resultado != 1){
-			break;
-		}
-		int escritura = 1;
-		while (escritura){
-			pthread_mutex_lock(&escribir_en_memoria);
+void liberar_memoria_de_proceso(int pid, t_configuraciones* configuraciones,int numero_tabla_de_paginas_primer_nivel){
+	pthread_mutex_lock(&tablas_primer_nivel_mutex);
+	t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,numero_tabla_de_paginas_primer_nivel);
+	pthread_mutex_unlock(&tablas_primer_nivel_mutex);
+	t_list_iterator* iterator = list_iterator_create(tabla_primer_nivel);
+	pthread_mutex_lock(&tabla_primer_nivel_mutex);
+	while(list_iterator_has_next(iterator)){
+		pthread_mutex_unlock(&tabla_primer_nivel_mutex);
+		t_fila_tabla_paginacion_1erNivel* fila_primer_nivel = list_iterator_next(iterator);
+		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+		t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,fila_primer_nivel->nro_tabla);
+		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+		t_list_iterator* iterator_segundo_nivel = list_iterator_create(tabla_segundo_nivel);
+		while(list_iterator_has_next(iterator_segundo_nivel)){
+			t_fila_tabla_paginacion_2doNivel* fila_segundo_nivel = list_iterator_next(iterator_segundo_nivel);	
 			
-			((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco+swap->desplazamiento] = NULL;
+			for(int i = 0; i < configuraciones->tam_pagina ; i++ ){
+			pthread_mutex_lock(&escribir_en_memoria);
+			((uint32_t *)espacio_Contiguo_En_Memoria)[fila_segundo_nivel->marco * configuraciones->tam_pagina + i] = NULL;
 			pthread_mutex_unlock(&escribir_en_memoria);
+			}
 			pthread_mutex_lock(&bitmap_memoria_mutex);
-			bitarray_clean_bit(bitmap_memoria,swap->marco);
+			bitarray_clean_bit(bitmap_memoria,fila_segundo_nivel->marco);
 			pthread_mutex_unlock(&bitmap_memoria_mutex);
-			escritura = 0;
 		}
 	}
-	fclose(fp);
+	pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 }
 
 void hilo_a_kernel(void* arg){
@@ -808,7 +811,8 @@ int atender_cliente(void* arg){
 			case FINALIZAR_PROCESO:
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
-				liberar_memoria_de_proceso(pid);
+				int entrada = leer_entero(buffer,0);
+				liberar_memoria_de_proceso(pid,p->configuraciones,entrada);
 				limpiar_swap(pid);
 				paquete = crear_paquete();
     			paquete->codigo_operacion = FINALIZAR_PROCESO;
@@ -1297,7 +1301,9 @@ void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->algoritmo_reemplazo = config_get_string_value(config , "ALGORITMO_REEMPLAZO");
 	configuraciones->marcos_por_proceso = config_get_int_value(config , "MARCOS_POR_PROCESO");
     configuraciones->retardo_swap = config_get_int_value(config , "RETARDO_SWAP");
+	configuraciones->ip_local = config_get_string_value(config , "IP_LOCAL");
 	path_swap = config_get_string_value(config , "PATH_SWAP");
+	mkdir(path_swap,S_IRWXU);
 }
 
 char* asignar_bytes(uint32_t cant_frames) {

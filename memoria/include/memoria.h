@@ -15,6 +15,7 @@
 #include <commons/collections/queue.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <semaphore.h>
 
 
@@ -28,6 +29,7 @@ typedef struct configuraciones {
     u_int16_t marcos_por_proceso;
     u_int16_t retardo_swap;
     char *path_swap;
+    char *ip_local;
 } t_configuraciones;
 
 typedef struct colas_struct {

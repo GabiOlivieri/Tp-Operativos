@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
 
 
 
-    int servidor = iniciar_servidor(logger , "CPU Dispatch" , "127.0.0.1" , configuraciones->puerto_escucha_dispatch);
+    int servidor = iniciar_servidor(logger , "CPU Dispatch" , configuraciones->ip_local , configuraciones->puerto_escucha_dispatch);
     setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	manejar_interrupciones(logger,configuraciones);
 	manejar_conexion_kernel(logger,configuraciones,servidor,tlb);
@@ -202,7 +202,7 @@ bool puede_cachear(t_list* tlb){
 }
 
 void manejar_interrupciones(t_log* logger, t_configuraciones* configuraciones){
-	int servidor = iniciar_servidor(logger , "CPU Interrupt" , "127.0.0.1" , configuraciones->puerto_escucha_interrupt);
+	int servidor = iniciar_servidor(logger , "CPU Interrupt" , configuraciones->ip_local , configuraciones->puerto_escucha_interrupt);
    	int client_socket_interrupt = esperar_cliente(logger , "CPU Interrupt" , servidor);
 	t_hilo_struct* hilox = malloc(sizeof(t_hilo_struct));
 	hilox->logger = logger;
@@ -318,6 +318,7 @@ void notificar_fin(t_log* logger,t_pcb* pcb,t_configuraciones* configuraciones,t
 	paquete->codigo_operacion = FINALIZAR_PROCESO;
 	printf("Notifico fin de proceso \n" );
 	log_info(logger, "Fin de proceso\n");
+	agregar_entero_a_paquete(paquete,pcb->pid);
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	enviar_paquete(paquete,socket);
 	eliminar_paquete(paquete);
@@ -588,6 +589,7 @@ void leer_config(t_config* config, t_configuraciones* configuraciones){
 	configuraciones->puerto_memoria = config_get_string_value(config , "PUERTO_MEMORIA");
 	configuraciones->puerto_escucha_dispatch = config_get_string_value(config , "PUERTO_ESCUCHA_DISPATCH");
 	configuraciones->puerto_escucha_interrupt = config_get_string_value(config , "PUERTO_ESCUCHA_INTERRUPT");
+	configuraciones->ip_local = config_get_string_value(config , "IP_LOCAL");
 }
 
 void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* configuraciones , int servidor){

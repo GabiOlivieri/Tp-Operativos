@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
 	sem_init(&procesos_bloqueados_binario, 0, 0);
 	sem_init(&blocked_suspended_a_ready_binario, 0, 0);
 
-	int servidor = iniciar_servidor(logger , "Kernel" , "127.0.0.1" , configuraciones->puerto_escucha);
+	int servidor = iniciar_servidor(logger , "Kernel" , configuraciones->ip_local , configuraciones->puerto_escucha);
 	setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 	manejar_conexion(logger,configuraciones,servidor,colas);
 	liberar_memoria(logger,config,configuraciones,servidor);
@@ -618,6 +618,7 @@ void leer_config(t_config* config, t_configuraciones* configuraciones){
     configuraciones->alfa = config_get_double_value(config , "ALFA");
     configuraciones->grado_multiprogramacion = config_get_int_value(config , "GRADO_MULTIPROGRAMACION");
     configuraciones->tiempo_max_bloqueado = config_get_int_value(config , "TIEMPO_MAXIMO_BLOQUEADO");
+	configuraciones->ip_local = config_get_string_value(config , "IP_LOCAL");
 }
 
 void liberar_memoria(t_log* logger, t_config* config , t_configuraciones* configuraciones , int servidor){

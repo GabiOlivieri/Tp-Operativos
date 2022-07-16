@@ -29,6 +29,7 @@ typedef struct configuraciones {
     double alfa;
     u_int16_t grado_multiprogramacion;
     u_int16_t tiempo_max_bloqueado;
+    char *ip_local;
 } t_configuraciones;
 
 typedef struct colas_struct {
