@@ -3,6 +3,7 @@
 DIR=/home/utnso/so-commons-library
 if [ -d "$DIR" ]; then
     echo "$DIR existe."
+    cd $DIR
     echo "utnso" | sudo -S make install
     sudo /sbin/ldconfig -v
 else 

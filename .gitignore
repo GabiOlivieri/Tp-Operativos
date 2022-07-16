@@ -6,7 +6,6 @@
 *.ko
 *.obj
 *.elf
-*.conf
 *.log
 
 # Linker output
