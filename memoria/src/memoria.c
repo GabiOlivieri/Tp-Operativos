@@ -527,7 +527,7 @@ int atender_cliente(void* arg){
 		switch (cod_op) {
 
 			case PRIMER_ACCESO_A_MEMORIA:
-				printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
+			//	printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				pthread_mutex_lock(&pid_en_cpu_mutex);
@@ -551,7 +551,7 @@ int atender_cliente(void* arg){
 				break;
 
 			case SEGUNDO_ACCESSO_A_MEMORIA:
-				printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
+			//	printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				pthread_mutex_lock(&pid_en_cpu_mutex);
@@ -680,7 +680,7 @@ int atender_cliente(void* arg){
 				break;
 			
 			case TERCER_ACCESSO_A_MEMORIA:
-				printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
+			//	printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				pthread_mutex_lock(&pid_en_cpu_mutex);
