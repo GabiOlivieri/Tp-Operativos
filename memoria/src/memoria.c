@@ -160,10 +160,10 @@ void suspender(t_pcb* pcb, t_configuraciones* configuraciones){
 				t_escritura_swap* swap = list_iterator_next(iterator_swap);
 				fwrite(swap, sizeof(t_escritura_swap),1,fp);
 				usleep(configuraciones->retardo_swap * 1000);
-				printf("Marco como libre el marco de RAM :%d \n",swap->marco);
+			//	printf("Marco como libre el marco de RAM :%d \n",swap->marco);
 				pthread_mutex_lock(&escribir_en_memoria);
 				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco * configuraciones->tam_pagina +swap->desplazamiento] = NULL;
-				printf("En la dir %d pongo el NULL",swap->marco * configuraciones->tam_pagina+swap->desplazamiento);
+			//	printf("En la dir %d pongo el NULL",swap->marco * configuraciones->tam_pagina+swap->desplazamiento);
 				pthread_mutex_unlock(&escribir_en_memoria);
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_clean_bit(bitmap_memoria,swap->marco);
@@ -538,11 +538,15 @@ int atender_cliente(void* arg){
 				pthread_mutex_lock(&tabla_primer_nivel_mutex);
 				t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
 				pthread_mutex_unlock(&tabla_primer_nivel_mutex);
+				pthread_mutex_lock(&tabla_primer_nivel_mutex);
 				t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_get(tabla_primer_nivel,entrada_tabla_primer_nivel);
+				pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
+				pthread_mutex_lock(&tabla_primer_nivel_mutex);
 				agregar_entero_a_paquete(paquete,fila_tabla_primer_nivel->nro_tabla);
+				pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
@@ -694,12 +698,14 @@ int atender_cliente(void* arg){
 					printf("Seg Fault\n");
 				switch(operacion){
 					case READ:
-					printf("leo el valor %d de la dir %d \n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento],marco * p->configuraciones->tam_pagina + desplazamiento);
+				//	printf("leo el valor %d de la dir %d \n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento],marco * p->configuraciones->tam_pagina + desplazamiento);
+					pthread_mutex_lock(&escribir_en_memoria);
 					log_info(p->logger,"leo el valor %d de la dir %d \n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento],marco * p->configuraciones->tam_pagina + desplazamiento);
+					pthread_mutex_unlock(&escribir_en_memoria);
 						break;
 					case WRITE:
 						valor = leer_entero(buffer,4);
-						printf("Escribo en la dir : %d \n",marco * p->configuraciones->tam_pagina + desplazamiento);
+				//		printf("Escribo en la dir : %d \n",marco * p->configuraciones->tam_pagina + desplazamiento);
 						log_info(p->logger,"Escribo en la dir : %d \n",marco * p->configuraciones->tam_pagina + desplazamiento);
 						pthread_mutex_lock(&escribir_en_memoria);
 						((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento] = valor;
@@ -1033,7 +1039,9 @@ int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
 		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 		list_add(tablas_segundo_nivel,tabla_paginas_segundo_nivel);
 		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+		pthread_mutex_lock(&tabla_primer_nivel_mutex);
 		list_add(tabla_paginas_primer_nivel,filas_tabla_primer_nivel);
+		pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 	}
 	numeros_tablas_primer_nivel++; // Se que acá habría que poner un mutex, pero lo pones y tira un error que hace parecer al payaso de it como algo lindo
 	

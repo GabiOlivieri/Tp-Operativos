@@ -37,6 +37,7 @@ typedef enum
     READY,
     RUNNING,
     BLOCKED,
+    SUSPENDED,
     TERMINATED
 } estado;
 
@@ -60,6 +61,7 @@ typedef struct
     t_list* lista_instrucciones;
     int tabla_paginas; //Inchequeable
     float estimacion_inicial;
+    float estimacion_rafaga;
     int rafaga_anterior;
     float alfa;
     int tiempo_bloqueo;
