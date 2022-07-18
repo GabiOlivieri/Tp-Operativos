@@ -168,6 +168,6 @@ int mandar_y_recibir_confirmacion(void* arg);
 
 void hilo_enviar_pcb_cpu(void* arg);
 
-void actualizar_tiempo_bloqueados(t_queue* cola_io_restantes,int limite_para_suspender,t_log* logger,t_configuraciones* configuraciones);
+void actualizar_tiempo_bloqueados(t_queue* cola_io_restantes,int limite_para_suspender,t_log* logger,t_configuraciones* configuraciones,int tiempo_a_anadir);
 
 #endif

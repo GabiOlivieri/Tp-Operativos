@@ -428,7 +428,7 @@ int primer_acceso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configur
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = PRIMER_ACCESO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
-//	printf("Envio %d y %d\n",pcb->tabla_paginas, entrada_tabla_primer_nivel);
+	printf("Envio %d y %d\n",pcb->tabla_paginas, entrada_tabla_primer_nivel);
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	agregar_entero_a_paquete(paquete,pcb->tabla_paginas);
 	agregar_entero_a_paquete(paquete,entrada_tabla_primer_nivel);
@@ -447,7 +447,7 @@ int segundo_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configu
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = SEGUNDO_ACCESSO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
-//	printf("Envio %d, %d y %d \n",tabla_segundo_nivel, entrada_segunda_tabla,codigo_operacion );
+	printf("Envio %d, %d y %d \n",tabla_segundo_nivel, entrada_segunda_tabla,codigo_operacion );
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	agregar_entero_a_paquete(paquete,tabla_segundo_nivel);
 	agregar_entero_a_paquete(paquete,entrada_segunda_tabla);
@@ -467,7 +467,7 @@ int tercer_acesso_a_memoria(t_pcb* pcb,t_log* logger,t_configuraciones* configur
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = TERCER_ACCESSO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
-//	printf("Envio %d, %d y %d \n",marco, desplazamiento,codigo_operacion );
+	printf("Envio %d, %d y %d \n",marco, desplazamiento,codigo_operacion );
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	agregar_entero_a_paquete(paquete,marco);
 	agregar_entero_a_paquete(paquete,desplazamiento);
@@ -487,7 +487,7 @@ void tercer_acesso_a_memoria_a_escribir(t_pcb* pcb,t_log* logger,t_configuracion
 	t_paquete* paquete = crear_paquete();
 	paquete->codigo_operacion = TERCER_ACCESSO_A_MEMORIA;
 	int socket = crear_conexion(logger , "Memoria" ,configuraciones->ip_memoria , configuraciones->puerto_memoria);
-//	printf("Envio %d, %d, %d y %d \n",marco, desplazamiento,codigo_operacion,valor );
+	printf("Envio %d, %d, %d y %d \n",marco, desplazamiento,codigo_operacion,valor );
 	agregar_entero_a_paquete(paquete,pcb->pid);
 	agregar_entero_a_paquete(paquete,marco);
 	agregar_entero_a_paquete(paquete,desplazamiento);
