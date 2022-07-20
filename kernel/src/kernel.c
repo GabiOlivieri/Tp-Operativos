@@ -137,21 +137,21 @@ void planificador_corto_plazo(void* arg){
 						aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_rafaga;
 
 						if (aux1 == aux2){
-					//			printf("Por FIFO tiene mas pioridad %d que %d \n",elegido->pid,pcb2->pid);
+								printf("Por FIFO tiene mas pioridad %d que %d \n",elegido->pid,pcb2->pid);
 								estimaciones[i] = aux1;
 								estimaciones[i+1] = aux2;
 								queue_push(aux,elegido);
 								elegido = pcb2;
 						}
 						else if (aux2 < aux1){
-					//			printf("El pcb %d tiene peor estimacion %f que %d con estimacion %f\n",elegido->pid,aux1,pcb2->pid,aux2);
+								printf("El pcb %d tiene peor estimacion %f que %d con estimacion %f\n",elegido->pid,aux1,pcb2->pid,aux2);
 								estimaciones[i] = aux2;
 								estimaciones[i+1] = aux1;
 								queue_push(aux,pcb2);
 								}
 							
 						else {
-					//			printf("Un pcb %d tiene peor estimacion %f que %d con estimacion %f\n",pcb2->pid,aux2,elegido->pid,aux1);
+								printf("Un pcb %d tiene peor estimacion %f que %d con estimacion %f\n",pcb2->pid,aux2,elegido->pid,aux1);
 								estimaciones[i] = aux1;
 								estimaciones[i+1] = aux2;
 								queue_push(aux,elegido);
