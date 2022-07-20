@@ -140,7 +140,9 @@ void modulo_swap(void* arg){
 				t_puntero_ram* puntero_ram = list_get(punteros_ram,pcb->pid);
 				pthread_mutex_unlock(&punteros_ram_mutex);
 				puntero_ram->marco_apuntado = 0;
+				pthread_mutex_lock(&punteros_ram_mutex);
 				list_replace(punteros_ram,pcb->pid,puntero_ram);
+				pthread_mutex_unlock(&punteros_ram_mutex);
 				log_info(p->logger,"Se swapeo el proceso: %d",pcb->pid);
 				t_paquete* paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
@@ -148,10 +150,8 @@ void modulo_swap(void* arg){
 				pthread_mutex_lock (&socket_kernel_mutex);
 				enviar_paquete(paquete,socket_kernel_swap);
 				pthread_mutex_unlock (&socket_kernel_mutex);
-				//des_suspender(pcb);
 				printf("termino de mandar a swap un proceso\n");
 				sem_post(&swap_mutex_binario);
-				//sem_post(&sem);
 				eliminar_paquete(paquete);
 			}
 			sem_post(&swap_mutex_binario);
@@ -191,8 +191,8 @@ void suspender(t_pcb* pcb, t_configuraciones* configuraciones){
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_clean_bit(bitmap_memoria,swap->marco);
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
-				usleep(configuraciones->retardo_swap * 1000);
 				marco_swapeado(swap->marco,1);
+				usleep(configuraciones->retardo_swap * 1000);
 			}
 			list_iterator_destroy(iterator_swap);
 			fclose(fp);
@@ -1162,7 +1162,7 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel,t
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
 			log_info(logger,"Victima CLOCK: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
-			if(punteroClock-1 == (list_size(marcosProceso) - 1) )
+			if(punteroClock == (list_size(marcosProceso) - 1) )
 			puntero_ram->marco_apuntado=0;
 			else
 			puntero_ram->marco_apuntado=punteroClock;
@@ -1192,7 +1192,7 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel,t
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
 			log_info(logger,"Victima CLOCK: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
-			if(punteroClock-1 == (list_size(marcosProceso) - 1) )
+			if(punteroClock == (list_size(marcosProceso) - 1) )
 			puntero_ram->marco_apuntado=0;
 			else
 			puntero_ram->marco_apuntado=punteroClock;
@@ -1233,7 +1233,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
 			log_info(logger,"Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
-			if(punteroClock-1 == (list_size(marcosProceso) - 1) )
+			if(punteroClock == (list_size(marcosProceso) - 1) )
 			puntero_ram->marco_apuntado=0;
 			else
 			puntero_ram->marco_apuntado=punteroClock;
@@ -1260,7 +1260,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
 			log_info(logger,"Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
-			if(punteroClock-1 == (list_size(marcosProceso) - 1) )
+			if(punteroClock == (list_size(marcosProceso) - 1) )
 			puntero_ram->marco_apuntado=0;
 			else
 			puntero_ram->marco_apuntado=punteroClock;
@@ -1289,7 +1289,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
 			log_info(logger,"Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
-			if(punteroClock-1 == (list_size(marcosProceso) - 1) )
+			if(punteroClock == (list_size(marcosProceso) - 1) )
 			puntero_ram->marco_apuntado=0;
 			else
 			puntero_ram->marco_apuntado=punteroClock;
@@ -1316,7 +1316,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
 			log_info(logger,"Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
 				recorredorPaginas->entrada_segundo_nivel->marco);
-			if(punteroClock-1 == (list_size(marcosProceso) - 1) )
+			if(punteroClock == (list_size(marcosProceso) - 1) )
 			puntero_ram->marco_apuntado=0;
 			else
 			puntero_ram->marco_apuntado=punteroClock;
