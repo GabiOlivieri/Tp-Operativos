@@ -81,6 +81,11 @@ typedef struct fila_tabla_swap{
     t_list* lista_datos;
 } t_fila_tabla_swap;
 
+typedef struct puntero_ram{
+    int pid;
+    int marco_apuntado;
+} t_puntero_ram;
+
 typedef struct escritura_swap{
     int marco;
     int desplazamiento;
