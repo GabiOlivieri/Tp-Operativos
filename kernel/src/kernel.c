@@ -66,8 +66,8 @@ void planificador_largo_plazo(void* arg){
 		if(!queue_is_empty(p->colas->cola_new) && procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
 			int size = queue_size(p->colas->cola_new);
 		//	printf("La cola NEW tiene %d procesos para planificar\n",size);
-			log_info(p->logger,"La cola NEW tiene %d procesos para planificar\n",size);
 			t_pcb* pcb = queue_pop(p->colas->cola_new);
+			log_info(p->logger,"El pid %d pasa a READY\n",pcb->pid);
 			pthread_mutex_lock (&cola_ready_mutex);
 			queue_push(p->colas->cola_ready,pcb);
 			iniciar_estructuras(p->logger,p->configuraciones,pcb);
@@ -137,21 +137,21 @@ void planificador_corto_plazo(void* arg){
 						aux2 = pcb2->alfa * pcb2->rafaga_anterior + (1 - pcb2->alfa) * pcb2->estimacion_rafaga;
 
 						if (aux1 == aux2){
-								printf("Por FIFO tiene mas pioridad %d que %d \n",elegido->pid,pcb2->pid);
+							//	printf("Por FIFO tiene mas pioridad %d que %d \n",elegido->pid,pcb2->pid);
 								estimaciones[i] = aux1;
 								estimaciones[i+1] = aux2;
 								queue_push(aux,elegido);
 								elegido = pcb2;
 						}
 						else if (aux2 < aux1){
-								printf("El pcb %d tiene peor estimacion %f que %d con estimacion %f\n",elegido->pid,aux1,pcb2->pid,aux2);
+							//	printf("El pcb %d tiene peor estimacion %f que %d con estimacion %f\n",elegido->pid,aux1,pcb2->pid,aux2);
 								estimaciones[i] = aux2;
 								estimaciones[i+1] = aux1;
 								queue_push(aux,pcb2);
 								}
 							
 						else {
-								printf("Un pcb %d tiene peor estimacion %f que %d con estimacion %f\n",pcb2->pid,aux2,elegido->pid,aux1);
+							//	printf("Un pcb %d tiene peor estimacion %f que %d con estimacion %f\n",pcb2->pid,aux2,elegido->pid,aux1);
 								estimaciones[i] = aux1;
 								estimaciones[i+1] = aux2;
 								queue_push(aux,elegido);
@@ -245,7 +245,7 @@ void enviar_pcb(void* arg){
 	t_paquete* paquete = crear_paquete();
     paquete->codigo_operacion = INICIAR_PROCESO;
     int cantidad_enteros = list_size(p->pcb->lista_instrucciones);
-    printf("El proceso %d es enviado a cpu\n",p->pcb->pid);
+  //  printf("El proceso %d es enviado a cpu\n",p->pcb->pid);
 	log_info(p->logger, "El proceso %d es enviado a cpu\n",p->pcb->pid);
     agregar_entero_a_paquete(paquete,p->pcb->pid);
     agregar_entero_a_paquete(paquete,p->pcb->pc);
@@ -373,7 +373,7 @@ void bloquear_proceso(void* arg){
 			interrupcion_enviada = 0;
 			pthread_mutex_unlock (&interrupcion_enviada_mutex);
 			if(strcmp (info_nuevo_bloqueado->mandar_a,"Block") == 0){
-				printf("El proceso %d sale de la cola BLOCK\n",info_nuevo_bloqueado->pcb->pid);
+			//	printf("El proceso %d sale de la cola BLOCK\n",info_nuevo_bloqueado->pcb->pid);
 				log_info(p->logger,"Desbloqueo un proceso \n" );
 				pthread_mutex_lock (&cola_ready_mutex);
 				queue_push(p->colas->cola_ready,info_nuevo_bloqueado->pcb);
@@ -382,7 +382,7 @@ void bloquear_proceso(void* arg){
 				sem_post (&planificador_corto_binario);
 			}
 			else{
-				printf("El proceso %d sale a la cola SUSPENDED-BLOCK\n",info_nuevo_bloqueado->pcb->pid);
+			//	printf("El proceso %d sale a la cola SUSPENDED-BLOCK\n",info_nuevo_bloqueado->pcb->pid);
 				log_info(p->logger,"Dessuspendo un proceso \n" );
 				queue_push(p->colas->cola_ready_suspended,info_nuevo_bloqueado->pcb);
 				sem_post (&planificador_mediano_mutex_binario);
@@ -400,12 +400,12 @@ void actualizar_tiempo_bloqueados(t_queue* cola_io_restantes,int limite_para_sus
 		t_info_bloqueado* info_bloqueado = queue_pop(cola_io_restantes);
 		info_bloqueado->tiempo_bloqueado = info_bloqueado->tiempo_bloqueado + tiempo_a_anadir;
 		//printf("Estimacion de pid %d: %d \n",pcb->pid,pcb->estimacion_inicial);
-		printf("El pcb %d ahora tiene %d de tiempo bloqueado\n",info_bloqueado->pcb->pid,info_bloqueado->tiempo_bloqueado);
+	//	printf("El pcb %d ahora tiene %d de tiempo bloqueado\n",info_bloqueado->pcb->pid,info_bloqueado->tiempo_bloqueado);
 		if(info_bloqueado->tiempo_bloqueado >= limite_para_suspender && info_bloqueado->pcb->estado!=SUSPENDED){
 			log_info(logger,"Suspendo un proceso \n" );
 			t_paquete* paquete = crear_paquete();
 			paquete->codigo_operacion = ENVIAR_A_SWAP;
-			printf("Mando a swap el pid : %d\n",info_bloqueado->pcb->pid);
+		//	printf("Mando a swap el pid : %d\n",info_bloqueado->pcb->pid);
 			int conexion = crear_conexion(logger , "Memoria" , configuraciones->ip_memoria ,configuraciones->puerto_memoria);
 			agregar_entero_a_paquete(paquete,info_bloqueado->pcb->pid);
 			agregar_entero_a_paquete(paquete,info_bloqueado->pcb->tiempo_bloqueo);
@@ -427,7 +427,7 @@ void actualizar_tiempo_bloqueados(t_queue* cola_io_restantes,int limite_para_sus
 	for(int i = 0; i < aux_size; i++){
 		t_info_bloqueado* info_bloqueado = queue_pop(aux2);
 		queue_push(cola_io_restantes,info_bloqueado);
-		printf("Empujo el pcb %d\n", info_bloqueado->pcb->pid);
+	//	printf("Empujo el pcb %d\n", info_bloqueado->pcb->pid);
 	}
 }
 
@@ -578,7 +578,7 @@ void iniciar_estructuras(t_log* logger,t_configuraciones* configuraciones,t_pcb*
 	char* buffer = recibir_buffer(&size, conexion);
 	close(conexion);
 	if(leer_entero(buffer,0) < 0){
-		printf("Falló al iniciar pcb\n");
+	//	printf("Falló al iniciar pcb\n");
 		free(pcb);
 	}
 	else{

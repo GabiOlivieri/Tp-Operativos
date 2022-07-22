@@ -87,6 +87,7 @@ typedef struct puntero_ram{
 } t_puntero_ram;
 
 typedef struct escritura_swap{
+    int entrada_segundo_nivel;
     int marco;
     int desplazamiento;
     uint32_t valor;
