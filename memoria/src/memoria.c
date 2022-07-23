@@ -135,7 +135,7 @@ void modulo_swap(void* arg){
 			//	printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
 			//	printf("Suspendo un proceso\n");
-				suspender(pcb,p->configuraciones);
+				suspender(pcb,p->configuraciones,p->logger);
 				pthread_mutex_lock(&punteros_ram_mutex);
 				t_puntero_ram* puntero_ram = list_get(punteros_ram,pcb->pid);
 				pthread_mutex_unlock(&punteros_ram_mutex);
@@ -159,7 +159,7 @@ void modulo_swap(void* arg){
 	}
 }
 
-void suspender(t_pcb* pcb, t_configuraciones* configuraciones){
+void suspender(t_pcb* pcb, t_configuraciones* configuraciones,t_log* logger){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
 	sem_wait(&tablas_swap);
 	while(list_iterator_has_next(iterator)){
@@ -184,6 +184,7 @@ void suspender(t_pcb* pcb, t_configuraciones* configuraciones){
 				fwrite(swap, sizeof(t_escritura_swap),1,fp);
 				
 			//	printf("Marco como libre el marco de RAM :%d \n",swap->marco);
+				log_info(logger,"Escribo en swap el valor %d del marco %d del proceso %d\n",swap->valor,swap->marco,pid_en_cpu);
 				pthread_mutex_lock(&escribir_en_memoria);
 				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco * configuraciones->tam_pagina +swap->desplazamiento] = NULL;
 			//	printf("En la dir %d pongo el NULL \n ",swap->marco * configuraciones->tam_pagina+swap->desplazamiento);
@@ -224,6 +225,8 @@ void marco_swapeado(int entrada_segundo_nivel,int marco,int modo){
 				if(modo){
 				//	printf("Actualizo marco de proceso a swap\n");
 					fila_tabla_segundo_nivel->p = 0;
+					fila_tabla_segundo_nivel->u = 0;
+					fila_tabla_segundo_nivel->m = 0;
 				}else{
 				//	printf("Actualizo marco a presente de swap\n");
 					fila_tabla_segundo_nivel->p = 1;
@@ -239,7 +242,7 @@ void marco_swapeado(int entrada_segundo_nivel,int marco,int modo){
 	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 }
 
-void swap(int entrada_segundo_nivel,int marco,t_configuraciones* configuraciones){
+void swap(int entrada_segundo_nivel,int marco,t_configuraciones* configuraciones,t_log* logger){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
 	sem_wait(&tablas_swap);
 	while(list_iterator_has_next(iterator)){
@@ -265,6 +268,7 @@ void swap(int entrada_segundo_nivel,int marco,t_configuraciones* configuraciones
 				pthread_mutex_unlock(&escribir_en_memoria);
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 			//	printf("Marco como libre el marco de RAM :%d \n",swap->marco);
+				log_info(logger,"Escribo en SWAP el valor %d del marco %d del proceso %d\n",swap->valor,swap->marco,pid_en_cpu);
 				bitarray_clean_bit(bitmap_memoria,swap->marco);
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
 				marco_swapeado(swap->entrada_segundo_nivel,swap->marco,1);
@@ -834,7 +838,7 @@ int atender_cliente(void* arg){
 				t_pcb* pcb_swap = malloc(sizeof(t_pcb));
 				pcb_swap->pid = leer_entero(buffer_swap,0);
 				pcb_swap->tiempo_bloqueo = leer_entero(buffer_swap,1);
-				log_info(p->logger, "Suspendo el proceso: %d\n",pcb_swap->pid);
+				log_info(p->logger, "Envio a SWAP el proceso: %d\n",pcb_swap->pid);
 				pthread_mutex_lock(&cola_suspendidos_mutex);
 				queue_push(p->cola_suspendidos,pcb_swap);
 				pthread_mutex_unlock(&cola_suspendidos_mutex);
@@ -1108,18 +1112,19 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel,t
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
-		//printf("El marco sospechoso tiene u: %d y m: %d y marco: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m,recorredorPaginas->entrada_segundo_nivel->marco);
+		log_info(logger,"La fila tiene u: %d y m: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m);
 
-	//	printf("Bit de uso == %d \n",recorredorPaginas->entrada_segundo_nivel->u);
+		//log_info(logger,"Bit de uso == %d \n",recorredorPaginas->entrada_segundo_nivel->u);
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
 			log_info(logger,"Victima CLOCK: marco:%d \n", marco);
-			if(punteroClock == (list_size(marcosProceso) - 1) )
-			puntero_ram->marco_apuntado=0;
-			else
-			puntero_ram->marco_apuntado=punteroClock;
-			log_info(logger,"El puntero del pid %d apunta a el marco de memoria: %d",pid,recorredorPaginas->entrada_segundo_nivel->marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
 			pthread_mutex_lock(&punteros_ram_mutex);
 			list_replace(punteros_ram,pid,puntero_ram);
 			pthread_mutex_unlock(&punteros_ram_mutex);	
@@ -1127,6 +1132,8 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel,t
 		} 
 		//printf("El el marco tenia bit de u en 1 \n");
 		actualizar_bit_u(recorredorPaginas,nro_tabla_primer_nivel);
+		log_info(logger,"Actualizo bit de uso a 0");
+		log_info(logger,"Muevo el puntero al siguiente marco");
 	}
 
 	//esta segunda vuelta es para encontrar 0 
@@ -1139,16 +1146,17 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel,t
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
-		//printf("El marco sospechoso tiene u: %d y m: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m);
+	
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
 			log_info(logger,"Victima CLOCK: marco:%d \n", marco);
-			if(punteroClock == (list_size(marcosProceso) - 1) )
-			puntero_ram->marco_apuntado=0;
-			else
-			puntero_ram->marco_apuntado=punteroClock;
-			log_info(logger,"El puntero del pid %d apunta a el marco de memoria: %d",pid,recorredorPaginas->entrada_segundo_nivel->marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
 			pthread_mutex_lock(&punteros_ram_mutex);
 			list_replace(punteros_ram,pid,puntero_ram);
 			pthread_mutex_unlock(&punteros_ram_mutex);
@@ -1181,20 +1189,24 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
+		log_info(logger,"La fila tiene u: %d y m: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m);
+
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 0 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
 			log_info(logger,"Victima CLOCK-M: marco:%d \n", marco);
-			if(punteroClock == (list_size(marcosProceso) - 1) )
-			puntero_ram->marco_apuntado=0;
-			else
-			puntero_ram->marco_apuntado=punteroClock;
-			log_info(logger,"El puntero del pid %d apunta a el marco de memoria: %d",pid,recorredorPaginas->entrada_segundo_nivel->marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
 			pthread_mutex_lock(&punteros_ram_mutex);
 			list_replace(punteros_ram,pid,puntero_ram);
 			pthread_mutex_unlock(&punteros_ram_mutex);
 			return marco; // Para que lo retorna??
 		}
 
+		log_info(logger,"Muevo el puntero al siguiente marco");
 	}
 
 	//esta segunda vuelta es para encontrar 0|1 modificando el bit de uso
@@ -1207,14 +1219,16 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
+
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 1 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
 			log_info(logger,"Victima CLOCK-M: marco:%d \n", marco);
-			if(punteroClock == (list_size(marcosProceso) - 1) )
-			puntero_ram->marco_apuntado=0;
-			else
-			puntero_ram->marco_apuntado=punteroClock;
-			log_info(logger,"El puntero del pid %d apunta a el marco de memoria: %d",pid,recorredorPaginas->entrada_segundo_nivel->marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
 			pthread_mutex_lock(&punteros_ram_mutex);
 			list_replace(punteros_ram,pid,puntero_ram);
 			pthread_mutex_unlock(&punteros_ram_mutex);
@@ -1222,7 +1236,8 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 		}
 
 		actualizar_bit_u(recorredorPaginas,nro_tabla_primer_nivel);
-
+		log_info(logger,"Actualizo bit de uso a 0");
+		log_info(logger,"Muevo el puntero al siguiente marco");
 	}
 
 	//esta tercera vuelta es para encontrar 0|0
@@ -1235,20 +1250,23 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
+		log_info(logger,"La fila %d tiene u: %d y m: %d \n",recorredorPaginas->index->entrada_segundo_nivel,recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m);
+
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 0 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
 			log_info(logger,"Victima CLOCK-M: marco:%d \n", marco);
-			if(punteroClock == (list_size(marcosProceso) - 1) )
-			puntero_ram->marco_apuntado=0;
-			else
-			puntero_ram->marco_apuntado=punteroClock;
-			log_info(logger,"El puntero del pid %d apunta a el marco de memoria: %d",pid,recorredorPaginas->entrada_segundo_nivel->marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
 			pthread_mutex_lock(&punteros_ram_mutex);
 			list_replace(punteros_ram,pid,puntero_ram);
 			pthread_mutex_unlock(&punteros_ram_mutex);
 			return marco; // Para que lo retorna??
 		}
-
+		log_info(logger,"Muevo el puntero al siguiente marco");
 	}
 
 	//esta segunda vuelta es para encontrar 0|1
@@ -1262,13 +1280,14 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 		punteroClock++;
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 1 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
 			log_info(logger,"Victima CLOCK-M: marco:%d \n", marco);
-			if(punteroClock == (list_size(marcosProceso) - 1) )
-			puntero_ram->marco_apuntado=0;
-			else
-			puntero_ram->marco_apuntado=punteroClock;
-			log_info(logger,"El puntero del pid %d apunta a el marco de memoria: %d",pid,recorredorPaginas->entrada_segundo_nivel->marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
 			pthread_mutex_lock(&punteros_ram_mutex);
 			list_replace(punteros_ram,pid,puntero_ram);
 			pthread_mutex_unlock(&punteros_ram_mutex);
@@ -1277,7 +1296,7 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 	}
 }
 
-int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_primer_nivel,t_configuraciones* configuraciones){
+int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_primer_nivel,t_configuraciones* configuraciones,t_log* logger){
 	pthread_mutex_lock(&tablas_primer_nivel_mutex);
 	t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
 	pthread_mutex_unlock(&tablas_primer_nivel_mutex);
@@ -1291,12 +1310,12 @@ int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_
 	int marco_a_asignar = fila_tabla_paginacion_2doNivel->marco;
 	pthread_mutex_unlock(&actualizar_marco_mutex);
 	sem_wait(&swap_mutex_binario);
-	swap(recorredorPaginas->index->entrada_segundo_nivel,marco_a_asignar,configuraciones);
+	swap(recorredorPaginas->index->entrada_segundo_nivel,marco_a_asignar,configuraciones,logger);
 	sem_post(&swap_mutex_binario);
 //	printf("Marco el marco anterior %d como no presente",fila_tabla_paginacion_2doNivel->marco);
 	fila_tabla_paginacion_2doNivel->p = 0;
 
-	//printf("La fila tenia u: %d y m: %d \n",fila_tabla_paginacion_2doNivel->u,fila_tabla_paginacion_2doNivel->m);
+	log_info(logger,"La fila tenia u: %d y m: %d \n",fila_tabla_paginacion_2doNivel->u,fila_tabla_paginacion_2doNivel->m);
 
 	//printf("Asigno pagina %d a marco\n", marco_a_asignar);
 

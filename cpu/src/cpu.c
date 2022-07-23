@@ -135,7 +135,7 @@ int buscar_en_TLB(t_list* tlb, int entrada1, int entrada2,t_log* logger){
 			if (fila_tlb_iterator->pagina->entrada_primer_nivel == entrada1 && fila_tlb_iterator->pagina->entrada_segundo_nivel == entrada2){
 			pthread_mutex_unlock(&tlb_entrada_primer_nivel_mutex);
 			//	printf("Encontre la dirección en la TLB \n");
-				log_info(logger, "Encontre la dirección en la TLB");
+				log_info(logger, "TLB Hit en la entrada %d!",iterator->index);
 				pthread_mutex_lock(&tlb_ultima_referencia_mutex);
 				fila_tlb_iterator->instante_de_ultima_referencia = time(NULL);
 				pthread_mutex_unlock(&tlb_ultima_referencia_mutex);

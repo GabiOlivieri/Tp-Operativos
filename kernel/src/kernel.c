@@ -400,7 +400,7 @@ void actualizar_tiempo_bloqueados(t_queue* cola_io_restantes,int limite_para_sus
 		t_info_bloqueado* info_bloqueado = queue_pop(cola_io_restantes);
 		info_bloqueado->tiempo_bloqueado = info_bloqueado->tiempo_bloqueado + tiempo_a_anadir;
 		//printf("Estimacion de pid %d: %d \n",pcb->pid,pcb->estimacion_inicial);
-	//	printf("El pcb %d ahora tiene %d de tiempo bloqueado\n",info_bloqueado->pcb->pid,info_bloqueado->tiempo_bloqueado);
+		log_info(logger,"El pcb %d ahora tiene %d de tiempo bloqueado\n",info_bloqueado->pcb->pid,info_bloqueado->tiempo_bloqueado);
 		if(info_bloqueado->tiempo_bloqueado >= limite_para_suspender && info_bloqueado->pcb->estado!=SUSPENDED){
 			log_info(logger,"Suspendo un proceso \n" );
 			t_paquete* paquete = crear_paquete();
@@ -471,7 +471,7 @@ void planificador_mediano_plazo(void* arg){
 			if (procesos_en_memoria<p->configuraciones->grado_multiprogramacion){
 				t_pcb* pcb = queue_pop(p->colas->cola_ready_suspended);
 				pthread_mutex_unlock (&procesos_en_memoria_mutex);
-				sacar_de_swap(p->logger,p->configuraciones,pcb);
+			//	sacar_de_swap(p->logger,p->configuraciones,pcb);
 			//	printf("Sale de la cola READY SUSPENDED a READY\n");
 				pthread_mutex_lock (&cola_ready_mutex);
 				queue_push(p->colas->cola_ready,pcb);
