@@ -13,6 +13,7 @@ int pid_en_cpu;
 t_list* tablas_primer_nivel;
 t_list* tablas_segundo_nivel;
 t_list* tabla_swap;
+t_list* punteros_ram;
 
 pthread_mutex_t escribir_en_memoria;
 pthread_mutex_t tabla_primer_nivel_mutex;
@@ -30,12 +31,17 @@ pthread_mutex_t tabla_swap_mutex;
 pthread_mutex_t bitmap_memoria_mutex;
 pthread_mutex_t actualizar_marco_mutex;
 pthread_mutex_t pid_en_cpu_mutex;
+pthread_mutex_t punteros_ram_mutex;
+
 
 
 //Semaforos de while 1 con condicional
 sem_t sem; // swap
 sem_t kernel_mutex_binario;
 sem_t swap_mutex_binario;
+sem_t tablas_swap;
+sem_t escritura_swap;
+sem_t recibir_paquetes;
 
 //Semaforos tipo cliente servidor
 
@@ -52,6 +58,10 @@ int main(int argc, char** argv) {
 	sem_init(&sem, 0, 0);
 	sem_init(&kernel_mutex_binario, 0, 0);
 	sem_init(&swap_mutex_binario, 0, 1);
+	sem_init(&tablas_swap, 0, 1);
+	sem_init(&escritura_swap, 0, 1);
+	sem_init(&recibir_paquetes, 0, 1);
+	
 
 	uint32_t espacio_memoria[configuraciones->tam_memoria];
 
@@ -61,6 +71,7 @@ int main(int argc, char** argv) {
 	tablas_primer_nivel = list_create();
 	tablas_segundo_nivel = list_create();
 	tabla_swap = list_create();
+	punteros_ram = list_create();
 	t_queue* cola_suspendidos = queue_create();
 	t_queue* cola_procesos_a_crear = queue_create();
 	init_memoria(configuraciones,logger);
@@ -123,8 +134,15 @@ void modulo_swap(void* arg){
 				pthread_mutex_unlock(&cola_suspendidos_mutex);
 			//	printf("Ingresó un proceso a la cola de suspendidos \n");
 				t_pcb* pcb = queue_pop(p->cola);
-				//printf("Mando a swap un proceso\n");
-				suspender(pcb,p->configuraciones);
+			//	printf("Suspendo un proceso\n");
+				suspender(pcb,p->configuraciones,p->logger);
+				pthread_mutex_lock(&punteros_ram_mutex);
+				t_puntero_ram* puntero_ram = list_get(punteros_ram,pcb->pid);
+				pthread_mutex_unlock(&punteros_ram_mutex);
+				puntero_ram->marco_apuntado = 0;
+				pthread_mutex_lock(&punteros_ram_mutex);
+				list_replace(punteros_ram,pcb->pid,puntero_ram);
+				pthread_mutex_unlock(&punteros_ram_mutex);
 				log_info(p->logger,"Se swapeo el proceso: %d",pcb->pid);
 				t_paquete* paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
@@ -132,10 +150,8 @@ void modulo_swap(void* arg){
 				pthread_mutex_lock (&socket_kernel_mutex);
 				enviar_paquete(paquete,socket_kernel_swap);
 				pthread_mutex_unlock (&socket_kernel_mutex);
-				//des_suspender(pcb);
-				//printf("termino de mandar a swap un proceso\n");
+			//	printf("Termino de mandar a swap el proceso %d\n",pcb->pid);
 				sem_post(&swap_mutex_binario);
-				//sem_post(&sem);
 				eliminar_paquete(paquete);
 			}
 			sem_post(&swap_mutex_binario);
@@ -143,41 +159,52 @@ void modulo_swap(void* arg){
 	}
 }
 
-void suspender(t_pcb* pcb, t_configuraciones* configuraciones){
+void suspender(t_pcb* pcb, t_configuraciones* configuraciones,t_log* logger){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
-	pthread_mutex_lock(&tabla_swap_mutex);
+	sem_wait(&tablas_swap);
 	while(list_iterator_has_next(iterator)){
-		pthread_mutex_unlock(&tabla_swap_mutex);
-		pthread_mutex_lock(&tabla_swap_mutex);
+		sem_post(&tablas_swap);
+		sem_wait(&tablas_swap);
+	//	printf("Tamaño de lista: %d",list_size(tabla_swap));
     	t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
-		pthread_mutex_unlock(&tabla_swap_mutex);
+		sem_post(&tablas_swap);
+	//	printf("fila_swap->pid==pcb->pid %d = %d \n",fila_swap->pid,pcb->pid);
 		if(fila_swap->pid==pcb->pid){
 			t_list_iterator* iterator_swap = list_iterator_create(fila_swap->lista_datos);
+	//		printf("la fila_swap tiene lista de datos \n");
 			char pidchar[5];
 			sprintf(pidchar, "%d", pcb->pid);
+	//		printf("Funciona el sprintf %s\n", pidchar);
 			FILE* fp = archivo_de_swap(pidchar,1);
 			while(list_iterator_has_next(iterator_swap)){
+				sem_wait(&escritura_swap);
 				t_escritura_swap* swap = list_iterator_next(iterator_swap);
+				sem_post(&escritura_swap);
+	//			printf("Habilita la escritura en swap \n");
 				fwrite(swap, sizeof(t_escritura_swap),1,fp);
-				usleep(configuraciones->retardo_swap * 1000);
-				printf("Marco como libre el marco de RAM :%d \n",swap->marco);
+				
+			//	printf("Marco como libre el marco de RAM :%d \n",swap->marco);
+				log_info(logger,"Escribo en swap el valor %d del marco %d del proceso %d\n",swap->valor,swap->marco,pid_en_cpu);
 				pthread_mutex_lock(&escribir_en_memoria);
 				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco * configuraciones->tam_pagina +swap->desplazamiento] = NULL;
-				printf("En la dir %d pongo el NULL",swap->marco * configuraciones->tam_pagina+swap->desplazamiento);
+			//	printf("En la dir %d pongo el NULL \n ",swap->marco * configuraciones->tam_pagina+swap->desplazamiento);
 				pthread_mutex_unlock(&escribir_en_memoria);
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_clean_bit(bitmap_memoria,swap->marco);
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
-				marco_swapeado(swap->marco,1);
+				marco_swapeado(swap->entrada_segundo_nivel,swap->marco,1);
+				usleep(configuraciones->retardo_swap * 1000);
 			}
+			list_iterator_destroy(iterator_swap);
 			fclose(fp);
 		}
 	}
-	pthread_mutex_unlock(&tabla_swap_mutex);
+	list_iterator_destroy(iterator);
+	sem_post(&tablas_swap);
 	
 }
 
-void marco_swapeado(int marco,int modo){
+void marco_swapeado(int entrada_segundo_nivel,int marco,int modo){
 	t_list_iterator* iterator = list_iterator_create(tablas_segundo_nivel);
 	pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 	while(list_iterator_has_next(iterator)){
@@ -193,40 +220,46 @@ void marco_swapeado(int marco,int modo){
 			t_fila_tabla_paginacion_2doNivel* fila_tabla_segundo_nivel = list_iterator_next(iterator_tabla);
 			pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 			pthread_mutex_lock(&actualizar_marco_mutex);
-			if(fila_tabla_segundo_nivel->marco==marco){
+			if(fila_tabla_segundo_nivel->marco==marco && iterator_tabla->index==entrada_segundo_nivel){
 				pthread_mutex_unlock(&actualizar_marco_mutex);
 				if(modo){
-					//printf("Actualizo marco de proceso a swap\n");
+				//	printf("Actualizo marco de proceso a swap\n");
 					fila_tabla_segundo_nivel->p = 0;
+					fila_tabla_segundo_nivel->u = 0;
+					fila_tabla_segundo_nivel->m = 0;
 				}else{
-					//printf("Actualizo marco a presente de swap\n");
+				//	printf("Actualizo marco a presente de swap\n");
 					fila_tabla_segundo_nivel->p = 1;
 				}
 				list_replace(tabla_segundo_nivel,iterator_tabla->index,fila_tabla_segundo_nivel);	
 			}
 			pthread_mutex_unlock(&actualizar_marco_mutex);
 		}
+		list_iterator_destroy(iterator_tabla);
 		pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 	}
+	list_iterator_destroy(iterator);
 	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 }
 
-void swap(int marco,t_configuraciones* configuraciones){
+void swap(int entrada_segundo_nivel,int marco,t_configuraciones* configuraciones,t_log* logger){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
-	pthread_mutex_lock(&tabla_swap_mutex);
+	sem_wait(&tablas_swap);
 	while(list_iterator_has_next(iterator)){
-		pthread_mutex_unlock(&tabla_swap_mutex);
-		pthread_mutex_lock(&tabla_swap_mutex);
+		sem_post(&tablas_swap);
+		sem_wait(&tablas_swap);
     	t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
-		pthread_mutex_unlock(&tabla_swap_mutex);
+		sem_post(&tablas_swap);
 		t_list_iterator* iterator_swap = list_iterator_create(fila_swap->lista_datos);
 		char pidchar[5];
 		sprintf(pidchar, "%d", fila_swap->pid);
-		pthread_mutex_lock(&tabla_swap_mutex);
+		sem_wait(&tablas_swap);
 		while(list_iterator_has_next(iterator_swap) && fila_swap->pid == pid_en_cpu){
-			pthread_mutex_unlock(&tabla_swap_mutex);
+			sem_post(&tablas_swap);
+			sem_wait(&escritura_swap);
 			t_escritura_swap* swap = list_iterator_next(iterator_swap);
-			if(swap->marco==marco){
+			sem_post(&escritura_swap);
+			if(swap->marco==marco && swap->entrada_segundo_nivel == entrada_segundo_nivel){
 				FILE* fp = archivo_de_swap(pidchar,1);
 				fwrite(swap, sizeof(t_escritura_swap),1,fp);
 				usleep(configuraciones->retardo_swap * 1000);
@@ -234,84 +267,39 @@ void swap(int marco,t_configuraciones* configuraciones){
 				((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco * configuraciones->tam_pagina+swap->desplazamiento] = NULL;
 				pthread_mutex_unlock(&escribir_en_memoria);
 				pthread_mutex_lock(&bitmap_memoria_mutex);
-				//printf("Marco como libre el marco de RAM :%d \n",swap->marco);
+			//	printf("Marco como libre el marco de RAM :%d \n",swap->marco);
+				log_info(logger,"Escribo en SWAP el valor %d del marco %d del proceso %d\n",swap->valor,swap->marco,pid_en_cpu);
 				bitarray_clean_bit(bitmap_memoria,swap->marco);
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
+				marco_swapeado(swap->entrada_segundo_nivel,swap->marco,1);
 				fclose(fp);
 			}
 		}
-		pthread_mutex_unlock(&tabla_swap_mutex);
+		list_iterator_destroy(iterator_swap);
+		sem_post(&tablas_swap);
 	}
-	pthread_mutex_unlock(&tabla_swap_mutex);
-}
-
-void des_suspender(t_pcb* pcb, t_configuraciones* configuraciones){
-	char pidchar[5];
-	sprintf(pidchar, "%d", pcb->pid);
-	FILE* fp = archivo_de_swap(pidchar,0);
-	t_escritura_swap* swap = malloc(sizeof(t_escritura_swap));
-	size_t resultado;
-	while (!feof(fp)){
-   		resultado = fread(swap, sizeof(t_escritura_swap), 1, fp);
-		if (resultado != 1){
-			break;
-		}
-		usleep(configuraciones->retardo_swap * 1000);
-		int marco = swap->marco;
-		pthread_mutex_lock(&escribir_en_memoria);
-		if(marco_desocupado(marco)){
-			pthread_mutex_unlock(&escribir_en_memoria);
-			pthread_mutex_lock(&escribir_en_memoria);
-			((uint32_t *)espacio_Contiguo_En_Memoria)[marco+swap->desplazamiento] = swap->valor;
-			pthread_mutex_unlock(&escribir_en_memoria);
-			pthread_mutex_lock(&bitmap_memoria_mutex);
-			bitarray_set_bit(bitmap_memoria,swap->marco);
-			pthread_mutex_unlock(&bitmap_memoria_mutex);
-			marco_swapeado(swap->marco,0);
-		}else{
-			int marco_nuevo = asignar_pagina_de_memoria();
-			actualizar_tabla(marco,marco_nuevo);
-			pthread_mutex_unlock(&escribir_en_memoria);
-			pthread_mutex_lock(&escribir_en_memoria);
-			((uint32_t *)espacio_Contiguo_En_Memoria)[marco+swap->desplazamiento] = swap->valor;
-			pthread_mutex_unlock(&escribir_en_memoria);
-			marco_swapeado(swap->marco,0);
-		}
-
-		t_list_iterator* iterator = list_iterator_create(tabla_swap);
-		pthread_mutex_lock(&tabla_swap_mutex);
-		while(list_iterator_has_next(iterator)){
-			pthread_mutex_unlock(&tabla_swap_mutex);
-			pthread_mutex_lock(&tabla_swap_mutex);
-			t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
-			pthread_mutex_unlock(&tabla_swap_mutex);
-			if(fila_swap->pid==pcb->pid){
-				pthread_mutex_lock(&tabla_swap_mutex);
-				list_add(fila_swap->lista_datos,swap);
-				pthread_mutex_unlock(&tabla_swap_mutex);
-			}
-		}
-		pthread_mutex_unlock(&tabla_swap_mutex);
-	}
-	fclose(fp);
+	list_iterator_destroy(iterator);
+	sem_post(&tablas_swap);
 }
 
 void des_swap(int marco_anterior, int marco_nuevo,t_configuraciones* configuraciones,int entrada_tabla_segundo_nivel,int tabla_segundo_nivel){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
-	pthread_mutex_lock(&tabla_swap_mutex);
+	sem_wait(&tablas_swap);
 	while(list_iterator_has_next(iterator)){
-		pthread_mutex_unlock(&tabla_swap_mutex);
-		pthread_mutex_lock(&tabla_swap_mutex);
+		sem_post(&tablas_swap);
+		sem_wait(&tablas_swap);
     	t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
-		pthread_mutex_unlock(&tabla_swap_mutex);
+		sem_post(&tablas_swap);
 		t_list_iterator* iterator_swap = list_iterator_create(fila_swap->lista_datos);
 		char pidchar[5];
 		sprintf(pidchar, "%d", fila_swap->pid);
 		pthread_mutex_lock(&pid_en_cpu_mutex);
 		while(list_iterator_has_next(iterator_swap) && fila_swap->pid == pid_en_cpu){
 			pthread_mutex_unlock(&pid_en_cpu_mutex);
+			sem_wait(&escritura_swap);
 			t_escritura_swap* swap = list_iterator_next(iterator_swap);
-			if(swap->marco==marco_anterior && !(swap->valor == ((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco * configuraciones->tam_pagina +swap->desplazamiento])){
+			sem_post(&escritura_swap);
+			if(swap->marco==marco_anterior && swap->entrada_segundo_nivel==entrada_tabla_segundo_nivel && !(swap->valor == ((uint32_t *)espacio_Contiguo_En_Memoria)[swap->marco * configuraciones->tam_pagina +swap->desplazamiento])){
 				swap->marco=marco_nuevo;
 				list_replace(fila_swap->lista_datos,iterator_swap->index,swap);
 				actualizar_tabla(entrada_tabla_segundo_nivel,tabla_segundo_nivel,marco_nuevo);
@@ -320,7 +308,7 @@ void des_swap(int marco_anterior, int marco_nuevo,t_configuraciones* configuraci
 				usleep(configuraciones->retardo_swap * 1000);
 				pthread_mutex_lock(&escribir_en_memoria);
 				((uint32_t *)espacio_Contiguo_En_Memoria)[marco_nuevo * configuraciones->tam_pagina +swap->desplazamiento] = swap->valor;
-				//printf("El nuevo valor de memoria es %d y el valor tendria que ser %d\n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco_nuevo * configuraciones->tam_pagina +swap->desplazamiento],swap->valor);
+			//	printf("El nuevo valor de memoria es %d va en el marco %d\n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco_nuevo * configuraciones->tam_pagina +swap->desplazamiento],marco_nuevo);
 				pthread_mutex_unlock(&escribir_en_memoria);
 				pthread_mutex_lock(&bitmap_memoria_mutex);
 				bitarray_set_bit(bitmap_memoria,marco_nuevo);
@@ -328,9 +316,11 @@ void des_swap(int marco_anterior, int marco_nuevo,t_configuraciones* configuraci
 				fclose(fp);
 			}
 		}
+		list_iterator_destroy(iterator_swap);
 		pthread_mutex_unlock(&pid_en_cpu_mutex);
 	}
-	pthread_mutex_unlock(&tabla_swap_mutex);
+	list_iterator_destroy(iterator);
+	sem_post(&tablas_swap);
 }
 
 int marco_desocupado(int marco){
@@ -355,8 +345,10 @@ int marco_desocupado(int marco){
 			}
 			pthread_mutex_unlock(&actualizar_marco_mutex);
 		}
+		list_iterator_destroy(iterator_tabla);
 		pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 	}
+	list_iterator_destroy(iterator);
 	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 	return 1;
 }
@@ -392,8 +384,10 @@ int buscar_tabla_segundo_nivel(int marco){
 			}
 			pthread_mutex_unlock(&actualizar_marco_mutex);
 		}
+		list_iterator_destroy(iterator_tabla);
 		pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
 	}
+	list_iterator_destroy(iterator);
 	pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 	return true;
 }
@@ -401,20 +395,21 @@ int buscar_tabla_segundo_nivel(int marco){
 void limpiar_swap(int pid){
 	t_list_iterator* iterator = list_iterator_create(tabla_swap);
 	int index_a_liberar = -1;
-	pthread_mutex_lock(&tabla_swap_mutex);
+	sem_wait(&tablas_swap);
 	while(list_iterator_has_next(iterator)){
-		pthread_mutex_unlock(&tabla_swap_mutex);
-		pthread_mutex_lock(&tabla_swap_mutex);
+		sem_post(&tablas_swap);
+		sem_wait(&tablas_swap);
     	t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
-		pthread_mutex_unlock(&tabla_swap_mutex);
+		sem_post(&tablas_swap);
 		if(fila_swap->pid==pid){
 			index_a_liberar = iterator->index;
 		}
 	}
-	pthread_mutex_unlock(&tabla_swap_mutex);
-	pthread_mutex_lock(&tabla_swap_mutex);
+	list_iterator_destroy(iterator);
+	sem_post(&tablas_swap);
+	sem_wait(&tablas_swap);
 	list_remove(tabla_swap,index_a_liberar);
-	pthread_mutex_unlock(&tabla_swap_mutex);
+	sem_post(&tablas_swap);
 	char pidchar[5];
 	sprintf(pidchar, "%d", pid);
 	const char* barra = "/";
@@ -424,8 +419,8 @@ void limpiar_swap(int pid){
 	strcat(path, barra);
 	strcat(path, pidchar);
 	strcat(path, extension);
-	//printf("Se elimina el archivo %s \n", pidchar);
 	remove(path);
+//	printf("Se elimina el archivo %s \n", pidchar);
 }
 
 void liberar_memoria_de_proceso(int pid, t_configuraciones* configuraciones,int numero_tabla_de_paginas_primer_nivel){
@@ -454,7 +449,9 @@ void liberar_memoria_de_proceso(int pid, t_configuraciones* configuraciones,int 
 				pthread_mutex_unlock(&bitmap_memoria_mutex);
 			}
 		}
+		list_iterator_destroy(iterator_segundo_nivel);
 	}
+	list_iterator_destroy(iterator);
 	pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 }
 
@@ -490,9 +487,9 @@ void hilo_a_kernel(void* arg){
 				t_fila_tabla_swap* fila_swap = malloc(sizeof(t_fila_tabla_swap));
 				fila_swap->pid=pcb->pid;
 				fila_swap->lista_datos=list_create();
-				pthread_mutex_lock(&tabla_swap_mutex);
+				sem_wait(&tablas_swap);
 				list_add(tabla_swap,fila_swap);
-				pthread_mutex_unlock(&tabla_swap_mutex);
+				sem_post(&tablas_swap);
 
 				paquete = crear_paquete();
 				paquete->codigo_operacion = ESTRUCTURAS_CREADAS;
@@ -500,6 +497,12 @@ void hilo_a_kernel(void* arg){
 				log_info(p->logger,"Iniciando estructuras del proceso: %d", pcb->pid);
 				iniciar_tablas(p->configuraciones,pcb->size);
 				log_info(p->logger,"Se creo el archivo swap correspondiente al proceso: %d",pcb->pid);
+				t_puntero_ram* puntero_ram = malloc(sizeof(puntero_ram));
+				puntero_ram->pid=pcb->pid;
+				puntero_ram->marco_apuntado = 0;
+				pthread_mutex_lock(&punteros_ram_mutex);
+				list_add(punteros_ram,puntero_ram);
+				pthread_mutex_unlock(&punteros_ram_mutex);
 			//	pthread_mutex_lock(&numeros_tablas_primer_nivel_mutex);
 				agregar_entero_a_paquete(paquete,(numeros_tablas_primer_nivel - 1));
 			//	pthread_mutex_unlock(&numeros_tablas_primer_nivel_mutex);
@@ -522,12 +525,14 @@ int atender_cliente(void* arg){
 	int pid;
 	int direccion_logica;
 	int operacion;
+	char *buffer_swap_sacar ;
 	while (1){
 		int cod_op = recibir_operacion(p->socket);
 		switch (cod_op) {
 
 			case PRIMER_ACCESO_A_MEMORIA:
-				printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
+			//	printf("Recibí un PRIMER_ACCESO_A_MEMORIA\n");
+				sem_wait(&recibir_paquetes);
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				pthread_mutex_lock(&pid_en_cpu_mutex);
@@ -535,23 +540,30 @@ int atender_cliente(void* arg){
 				pthread_mutex_unlock(&pid_en_cpu_mutex);
 				int nro_tabla_primer_nivel = leer_entero(buffer,1);
 				int entrada_tabla_primer_nivel = leer_entero(buffer,2);
+				
 				pthread_mutex_lock(&tabla_primer_nivel_mutex);
 				t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
 				pthread_mutex_unlock(&tabla_primer_nivel_mutex);
+				pthread_mutex_lock(&tabla_primer_nivel_mutex);
 				t_fila_tabla_paginacion_1erNivel* fila_tabla_primer_nivel = list_get(tabla_primer_nivel,entrada_tabla_primer_nivel);
+				pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 				paquete = crear_paquete();
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
+				pthread_mutex_lock(&tabla_primer_nivel_mutex);
 				agregar_entero_a_paquete(paquete,fila_tabla_primer_nivel->nro_tabla);
+				pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
+				sem_post(&recibir_paquetes);
 				eliminar_paquete(paquete);
 				close(p->socket);
 				pthread_exit(NULL);
 				break;
 
 			case SEGUNDO_ACCESSO_A_MEMORIA:
-				printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
+			//	printf("Recibí un SEGUNDO_ACCESSO_A_MEMORIA\n");
+				sem_wait(&recibir_paquetes);
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				pthread_mutex_lock(&pid_en_cpu_mutex);
@@ -560,6 +572,7 @@ int atender_cliente(void* arg){
 				int nro_tabla_segundo_nivel = leer_entero(buffer,1);
 				int entrada_tabla_segundo_nivel = leer_entero(buffer,2);
 				operacion = leer_entero(buffer,3);
+				
 				pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 				t_list* tabla_segundo_nivel = list_get(tablas_segundo_nivel,nro_tabla_segundo_nivel);
 				pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
@@ -567,27 +580,30 @@ int atender_cliente(void* arg){
 				pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 				fila_tabla_segundo_nivel = list_get(tabla_segundo_nivel,entrada_tabla_segundo_nivel);
 				pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
+			//	printf("Recibo %d %d y %d \n",nro_tabla_segundo_nivel,entrada_tabla_segundo_nivel,operacion );
 				switch(operacion){
 					case READ:
 						if(fila_tabla_segundo_nivel->p == 1){
-							//printf("El frame está presente en memoria y va a contestarle a cpu \n");
+					//		printf("El frame está presente en memoria y va a contestarle a cpu \n");
 							fila_tabla_segundo_nivel->u = 1;
 							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
 							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
-						}else if (fila_tabla_segundo_nivel->p == 0 & fila_tabla_segundo_nivel->marco >= 0){
-							//printf("El frame no está presente en memoria y necesito traelo del swap\n");
+						}else if (fila_tabla_segundo_nivel->p == 0 && fila_tabla_segundo_nivel->marco >= 0){
+					//		printf("El frame no está presente en memoria y necesito traelo del swap\n");
+							pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 							int marco_anterior = fila_tabla_segundo_nivel->marco;
-							//printf("Marco anterior %d \n", marco_anterior);
+							pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+					//		printf("Marco anterior %d \n", marco_anterior);
 							int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
 							t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
 							int marco;
 							if(strcmp(p->configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
 								if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso)){
-								  marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger);
+								  marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger,pid);
 								}
 								else { marco = buscar_marco_libre_en_memoria();}
-								//printf("Marco nuevo %d \n",marco);
+						//		printf("Marco nuevo %d \n",marco);
 								sem_wait(&swap_mutex_binario);
 								des_swap(marco_anterior,marco,p->configuraciones,entrada_tabla_segundo_nivel,nro_tabla_segundo_nivel);
 								sem_post(&swap_mutex_binario);
@@ -595,35 +611,38 @@ int atender_cliente(void* arg){
 								}
 							else{
 								if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso)){
-								  marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger);
+								  marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger,pid);
 								}
 								else { marco = buscar_marco_libre_en_memoria();}
+							//	printf("Marco nuevo %d \n",marco);
 								sem_wait(&swap_mutex_binario);
 								des_swap(marco_anterior,marco,p->configuraciones,entrada_tabla_segundo_nivel,nro_tabla_segundo_nivel);
 								sem_post(&swap_mutex_binario);
 								fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco,0);
 							}
 						}else{
-							//printf("El frame es invalido y va a contestarle a cpu con un -1 \n");
+						//	printf("El frame es invalido y va a contestarle a cpu con un -1 \n");
 						}
 						break;
 					case WRITE:
 						if(fila_tabla_segundo_nivel->p == 1){
-							//printf("El frame está presente en memoria y voy a usarlo \n");
+						//	printf("El frame está presente en memoria y voy a usarlo \n");
 							fila_tabla_segundo_nivel->u = 1;
 							fila_tabla_segundo_nivel->m = 1;
 							pthread_mutex_lock(&tabla_segundo_nivel_mutex);
 							list_replace(tabla_segundo_nivel,entrada_tabla_segundo_nivel,fila_tabla_segundo_nivel);
 							pthread_mutex_unlock(&tabla_segundo_nivel_mutex);
-						}else if (fila_tabla_segundo_nivel->p == 0 & fila_tabla_segundo_nivel->marco >= 0 & fila_tabla_segundo_nivel->p == 0){
-							//printf("El frame no está presente en memoria y necesito traelo del swap\n");
+						}else if (fila_tabla_segundo_nivel->p == 0 && fila_tabla_segundo_nivel->marco >= 0 && fila_tabla_segundo_nivel->p == 0){
+						//	printf("El frame no está presente en memoria y necesito traelo del swap\n");
+							pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 							int marco_anterior = fila_tabla_segundo_nivel->marco;
+							pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 							int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
 							t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
 							int marco;
 							if(strcmp(p->configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
 								if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso)){
-								  marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger);
+								  marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger,pid);
 								}
 								else { marco = buscar_marco_libre_en_memoria();}
 								sem_wait(&swap_mutex_binario);
@@ -633,7 +652,7 @@ int atender_cliente(void* arg){
 								}
 							else{
 								if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso)){
-								  marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger);
+								  marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger,pid);
 								}
 								else { marco = buscar_marco_libre_en_memoria();}
 								sem_wait(&swap_mutex_binario);
@@ -643,21 +662,21 @@ int atender_cliente(void* arg){
 							}
 						
 						}else{
-							//printf("El frame no esta asignado\n");
+						//	printf("El frame no esta asignado\n");
 							if (!puede_agregar_marco(nro_tabla_segundo_nivel,p->configuraciones->marcos_por_proceso)){
-								//printf("Hay que reemplazar algun frame \n");
+						//		printf("Hay que reemplazar algun frame \n");
 								int nro_tabla_primer_nivel = buscar_tabla_primer_nivel(nro_tabla_segundo_nivel);
 								t_list* marcos_de_los_proceso = marcos_del_proceso(nro_tabla_primer_nivel);
 								if(strcmp(p->configuraciones->algoritmo_reemplazo,"CLOCK") == 0){
-									int marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger);
+									int marco = realizar_reemplazo_CLOCK(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger,pid);
 									fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco,1);
 								}
 								else{
-									int marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger);
+									int marco = realizar_reemplazo_CLOCK_MODIFICADO(marcos_de_los_proceso,nro_tabla_primer_nivel,p->configuraciones,p->logger,pid);
 									fila_tabla_segundo_nivel = ingresar_frame_de_reemplazo(tabla_segundo_nivel,p->configuraciones,entrada_tabla_segundo_nivel,marco,1);
 								}
 							}else{
-								//printf("Escribo en un frame nuevo \n");
+							//	printf("Escribo en un frame nuevo \n");
 								fila_tabla_segundo_nivel = buscar_frame_libre(tabla_segundo_nivel,p->configuraciones);
 								pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 								list_replace(tablas_segundo_nivel,nro_tabla_segundo_nivel,tabla_segundo_nivel);
@@ -670,17 +689,20 @@ int atender_cliente(void* arg){
     			paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pid);
 				pthread_mutex_lock(&tablas_segundo_nivel_mutex);
+			//	printf("Mando el marco: %d \n",fila_tabla_segundo_nivel->marco );
 				agregar_entero_a_paquete(paquete,fila_tabla_segundo_nivel->marco);
 				pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				sem_post(&recibir_paquetes);
 				close(p->socket);
 				pthread_exit(NULL);
 				break;
 			
 			case TERCER_ACCESSO_A_MEMORIA:
-				printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
+			//	printf("Recibí un TERCER_ACCESSO_A_MEMORIA\n");
+				sem_wait(&recibir_paquetes);
 				buffer = recibir_buffer(&size, p->socket);
 				pid = leer_entero(buffer,0);
 				pthread_mutex_lock(&pid_en_cpu_mutex);
@@ -689,39 +711,55 @@ int atender_cliente(void* arg){
 				int marco = leer_entero(buffer,1);
 				int desplazamiento = leer_entero(buffer,2);
 				operacion = leer_entero(buffer,3);
+				int entrada_segundo_nivel = leer_entero(buffer,5);
 				uint32_t valor;
-				if ( desplazamiento > p->configuraciones->tam_pagina)
-					printf("Seg Fault\n");
-				switch(operacion){
-					case READ:
-					printf("leo el valor %d de la dir %d \n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento],marco * p->configuraciones->tam_pagina + desplazamiento);
-					log_info(p->logger,"leo el valor %d de la dir %d \n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento],marco * p->configuraciones->tam_pagina + desplazamiento);
-						break;
-					case WRITE:
-						valor = leer_entero(buffer,4);
-						printf("Escribo en la dir : %d \n",marco * p->configuraciones->tam_pagina + desplazamiento);
-						log_info(p->logger,"Escribo en la dir : %d \n",marco * p->configuraciones->tam_pagina + desplazamiento);
-						pthread_mutex_lock(&escribir_en_memoria);
-						((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento] = valor;
-						pthread_mutex_unlock(&escribir_en_memoria);
-						t_list_iterator* iterator = list_iterator_create(tabla_swap);
-						pthread_mutex_lock(&tabla_swap_mutex);
-						while(list_iterator_has_next(iterator)){
-							pthread_mutex_unlock(&tabla_swap_mutex);
-        					pthread_mutex_lock(&tabla_swap_mutex);
-							t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
-							pthread_mutex_unlock(&tabla_swap_mutex);
-							if(fila_swap->pid==pid){
-								t_escritura_swap* swap = malloc(sizeof(t_escritura_swap));
-								swap->marco=marco;
-								swap->desplazamiento=desplazamiento;
-								swap->valor=valor;
-								pthread_mutex_lock(&tabla_swap_mutex);
-								list_add(fila_swap->lista_datos,swap);
-								pthread_mutex_unlock(&tabla_swap_mutex);
+				if (marco < 0){
+			//			printf("Seg Fault de marco %d y desplazamiento %d\n",marco,desplazamiento);
+						marco = 0;
+					}
+				else{
+					switch(operacion){
+						case READ:
+							
+						//	printf("leo el valor %d de la dir %d \n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento],marco * p->configuraciones->tam_pagina + desplazamiento);
+							pthread_mutex_lock(&escribir_en_memoria);
+							log_info(p->logger,"Leo el valor %d de la dir %d \n",((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento],marco * p->configuraciones->tam_pagina + desplazamiento);
+							pthread_mutex_unlock(&escribir_en_memoria);
+							break;
+						case WRITE:
+							valor = leer_entero(buffer,4);
+						
+						//	printf("Escribo en la dir : %d el valor %d \n",marco * p->configuraciones->tam_pagina + desplazamiento,valor);
+							log_info(p->logger,"Escribo en la dir : %d el valor %d \n",marco * p->configuraciones->tam_pagina + desplazamiento,valor);
+							sem_wait(&swap_mutex_binario);
+							pthread_mutex_lock(&escribir_en_memoria);
+							((uint32_t *)espacio_Contiguo_En_Memoria)[marco * p->configuraciones->tam_pagina + desplazamiento] = valor;
+							pthread_mutex_unlock(&escribir_en_memoria);
+							sem_post(&swap_mutex_binario);
+							t_list_iterator* iterator = list_iterator_create(tabla_swap);
+							sem_wait(&tablas_swap);
+							while(list_iterator_has_next(iterator)){
+								sem_post(&tablas_swap);
+								sem_wait(&tablas_swap);
+								t_fila_tabla_swap* fila_swap = list_iterator_next(iterator);
+								sem_post(&tablas_swap);
+								if(fila_swap->pid==pid){
+									t_escritura_swap* swap = malloc(sizeof(t_escritura_swap));
+									swap->entrada_segundo_nivel=entrada_segundo_nivel;
+								//	printf("Lo guardo en la entrada de segundo nivel %d \n",swap->entrada_segundo_nivel);
+									swap->marco=marco;
+									swap->desplazamiento=desplazamiento;
+									swap->valor=valor;
+									sem_wait(&tablas_swap);
+									sem_wait(&swap_mutex_binario);
+									list_add(fila_swap->lista_datos,swap);
+									sem_post(&swap_mutex_binario);
+									sem_post(&tablas_swap);
+								}
 							}
-						}
-						pthread_mutex_unlock(&tabla_swap_mutex);
+							list_iterator_destroy(iterator);
+							sem_post(&tablas_swap);
+					}
 				}
 				paquete = crear_paquete();
 				paquete->codigo_operacion = DEVOLVER_PROCESO;
@@ -734,6 +772,7 @@ int atender_cliente(void* arg){
 				usleep(p->configuraciones->retardo_memoria * 1000);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
+				sem_post(&recibir_paquetes);
 				close(p->socket);
 				pthread_exit(NULL);
 				
@@ -771,17 +810,17 @@ int atender_cliente(void* arg){
 				break;
 
 		    case SACAR_DE_SWAP:
-				log_info(p->logger, "Desuspendo el proceso\n");
-				char * buffer_swap_sacar = recibir_buffer(&size, p->socket);
+			//	log_info(p->logger, "Desuspendo el proceso\n");
+				buffer_swap_sacar = recibir_buffer(&size, p->socket);
 				t_pcb* pcb_swap_sacar = malloc(sizeof(t_pcb));
 				pcb_swap_sacar->pid = leer_entero(buffer_swap_sacar,0);
 				//printf("Voy a sacar de swap el pid %d \n",pcb_swap_sacar->pid);
-				sem_wait(&swap_mutex_binario);
+				//sem_wait(&swap_mutex_binario);
 				//des_suspender(pcb_swap_sacar,p->configuraciones);
-				sem_post(&swap_mutex_binario);
+				//sem_post(&swap_mutex_binario);
 				//printf("Lo saco de swap el pid %d \n",pcb_swap_sacar->pid);
 				paquete = crear_paquete();
-				paquete->codigo_operacion = FINALIZAR_PROCESO;
+				paquete->codigo_operacion = DEVOLVER_PROCESO;
 				agregar_entero_a_paquete(paquete,pcb_swap_sacar->pid);
 				enviar_paquete(paquete, p->socket);
 				eliminar_paquete(paquete);
@@ -799,7 +838,7 @@ int atender_cliente(void* arg){
 				t_pcb* pcb_swap = malloc(sizeof(t_pcb));
 				pcb_swap->pid = leer_entero(buffer_swap,0);
 				pcb_swap->tiempo_bloqueo = leer_entero(buffer_swap,1);
-				log_info(p->logger, "Suspendo el proceso: %d\n",pcb_swap->pid);
+				log_info(p->logger, "Envio a SWAP el proceso: %d\n",pcb_swap->pid);
 				pthread_mutex_lock(&cola_suspendidos_mutex);
 				queue_push(p->cola_suspendidos,pcb_swap);
 				pthread_mutex_unlock(&cola_suspendidos_mutex);
@@ -816,7 +855,9 @@ int atender_cliente(void* arg){
 				int entrada = leer_entero(buffer,0);
 				liberar_memoria_de_proceso(pid,p->configuraciones,entrada);
 				log_info(p->logger,"Se libero memoria del proceso: %d\n",pid);
+				sem_wait(&swap_mutex_binario);
 				limpiar_swap(pid);
+				sem_post(&swap_mutex_binario);
 				log_info(p->logger,"Se elimino el archivo swap del proceso: %d\n",pid);
 				log_info(p->logger,"Se finalizo el proceso: %d\n",pid);
 				paquete = crear_paquete();
@@ -884,7 +925,9 @@ t_list* marcos_del_proceso(int nro_tabla_primer_nivel){
 				list_add(marcos_de_proceso,marco_del_proceso);
 			}
 		}
+		list_iterator_destroy(iterator_tabla_segundo_nivel);
 	}
+	list_iterator_destroy(iterator);
 	list_sort(marcos_de_proceso,sorteanding);
 	return marcos_de_proceso;
 }
@@ -910,8 +953,9 @@ int buscar_tabla_primer_nivel(int nro_tabla_segundo_nivel){
 			}
 			pthread_mutex_unlock(&tablas_primer_nivel_mutex);
 		}
-		
+		list_iterator_destroy(iterator_tabla_primer_nivel);
 	}
+	list_iterator_destroy(iterator);
 	pthread_mutex_unlock(&tablas_primer_nivel_mutex);
 }
 
@@ -933,6 +977,7 @@ t_fila_tabla_paginacion_2doNivel* buscar_frame_libre(t_list* tabla_segundo_nivel
 			return fila_tabla_segundo_nivel;
 		}
 	}
+	list_iterator_destroy(iterator);
 }
 
 t_fila_tabla_paginacion_2doNivel* ingresar_frame_de_reemplazo(t_list* tabla_segundo_nivel,t_configuraciones* configuraciones,int entrada, int marco,int m){
@@ -956,7 +1001,7 @@ int asignar_pagina_de_memoria(){
 		pthread_mutex_lock(&bitmap_memoria_mutex);
 		if (!bitarray_test_bit(bitmap_memoria,i)){
 			pthread_mutex_unlock(&bitmap_memoria_mutex);
-			//printf("Se carga la posición de memoria %d\n",i);
+		//	printf("Se carga la posición de memoria %d\n",i);
 			pthread_mutex_lock(&bitmap_memoria_mutex);
 			bitarray_set_bit(bitmap_memoria,i);
 			pthread_mutex_unlock(&bitmap_memoria_mutex);
@@ -964,7 +1009,7 @@ int asignar_pagina_de_memoria(){
 		}
 		pthread_mutex_unlock(&bitmap_memoria_mutex);
 	}
-	//printf("No hay memoria xd\n");
+//	printf("No hay memoria xd\n");
 	return -1;
 }
 
@@ -1033,7 +1078,9 @@ int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
 		pthread_mutex_lock(&tablas_segundo_nivel_mutex);
 		list_add(tablas_segundo_nivel,tabla_paginas_segundo_nivel);
 		pthread_mutex_unlock(&tablas_segundo_nivel_mutex);
+		pthread_mutex_lock(&tabla_primer_nivel_mutex);
 		list_add(tabla_paginas_primer_nivel,filas_tabla_primer_nivel);
+		pthread_mutex_unlock(&tabla_primer_nivel_mutex);
 	}
 	numeros_tablas_primer_nivel++; // Se que acá habría que poner un mutex, pero lo pones y tira un error que hace parecer al payaso de it como algo lindo
 	
@@ -1042,13 +1089,16 @@ int iniciar_tablas(t_configuraciones* configuraciones,int tamano_necesario){
 	pthread_mutex_unlock(&tablas_primer_nivel_mutex);
 }
 
-int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel,t_configuraciones* configuraciones, t_log* logger)
+int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel,t_configuraciones* configuraciones, t_log* logger,int pid)
 //paginas_ppal lista de paginas del proceso
 {
-	int punteroClock = 0;
+	pthread_mutex_lock(&punteros_ram_mutex);
+	t_puntero_ram* puntero_ram = list_get(punteros_ram,pid);
+	pthread_mutex_unlock(&punteros_ram_mutex);
+	int punteroClock = puntero_ram->marco_apuntado;
 	t_info_marcos_por_proceso* recorredorPaginas;
 	int cantidadFrames = list_size(marcosProceso);
-	//printf("Cantidad de frames del proceso: %d\n",cantidadFrames);
+//	printf("Cantidad de frames del proceso: %d\n",cantidadFrames);
 //	printf("Voy a analizar los %d frames del proceso\n", cantidadFrames);
 	int marco;
 
@@ -1062,18 +1112,28 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel,t
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
-		//printf("El marco sospechoso tiene u: %d y m: %d y marco: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m,recorredorPaginas->entrada_segundo_nivel->marco);
+		log_info(logger,"La fila tiene u: %d y m: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m);
 
-	//	printf("Bit de uso == %d \n",recorredorPaginas->entrada_segundo_nivel->u);
+		//log_info(logger,"Bit de uso == %d \n",recorredorPaginas->entrada_segundo_nivel->u);
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
-			log_info(logger,"Victima CLOCK: pagina:%d - marco:%d \n", marco,
-				recorredorPaginas->entrada_segundo_nivel->marco);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
+			log_info(logger,"Victima CLOCK: marco:%d \n", marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
+			pthread_mutex_lock(&punteros_ram_mutex);
+			list_replace(punteros_ram,pid,puntero_ram);
+			pthread_mutex_unlock(&punteros_ram_mutex);	
 			return marco; // Para que lo retorna??
 		} 
 		//printf("El el marco tenia bit de u en 1 \n");
 		actualizar_bit_u(recorredorPaginas,nro_tabla_primer_nivel);
+		log_info(logger,"Actualizo bit de uso a 0");
+		log_info(logger,"Muevo el puntero al siguiente marco");
 	}
 
 	//esta segunda vuelta es para encontrar 0 
@@ -1086,23 +1146,34 @@ int realizar_reemplazo_CLOCK(t_list* marcosProceso, int nro_tabla_primer_nivel,t
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
-		//printf("El marco sospechoso tiene u: %d y m: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m);
+	
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
-			log_info(logger,"Victima CLOCK: pagina:%d - marco:%d \n", marco,
-				recorredorPaginas->entrada_segundo_nivel->marco);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
+			log_info(logger,"Victima CLOCK: marco:%d \n", marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
+			pthread_mutex_lock(&punteros_ram_mutex);
+			list_replace(punteros_ram,pid,puntero_ram);
+			pthread_mutex_unlock(&punteros_ram_mutex);
 			return marco; // Para que lo retorna??
 		} 
 	}
 
 }
 
-int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_primer_nivel,t_configuraciones* configuraciones,t_log* logger)
+int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_primer_nivel,t_configuraciones* configuraciones,t_log* logger,int pid)
 //paginas_ppal lista de paginas del proceso
 {
     
-	int punteroClock = 0;
+	pthread_mutex_lock(&punteros_ram_mutex);
+	t_puntero_ram* puntero_ram = list_get(punteros_ram,pid);
+	pthread_mutex_unlock(&punteros_ram_mutex);
+	int punteroClock = puntero_ram->marco_apuntado;
 	t_info_marcos_por_proceso* recorredorPaginas;
 	int cantidadFrames = list_size(marcosProceso);
 //	printf("Voy a analizar los %d frames del proceso\n", cantidadFrames);
@@ -1118,13 +1189,24 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
+		log_info(logger,"La fila tiene u: %d y m: %d \n",recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m);
+
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 0 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
-			log_info(logger,"Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
-				recorredorPaginas->entrada_segundo_nivel->marco);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
+			log_info(logger,"Victima CLOCK-M: marco:%d \n", marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
+			pthread_mutex_lock(&punteros_ram_mutex);
+			list_replace(punteros_ram,pid,puntero_ram);
+			pthread_mutex_unlock(&punteros_ram_mutex);
 			return marco; // Para que lo retorna??
 		}
 
+		log_info(logger,"Muevo el puntero al siguiente marco");
 	}
 
 	//esta segunda vuelta es para encontrar 0|1 modificando el bit de uso
@@ -1137,15 +1219,25 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
+
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 1 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
-			log_info(logger,"Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
-				recorredorPaginas->entrada_segundo_nivel->marco);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
+			log_info(logger,"Victima CLOCK-M: marco:%d \n", marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
+			pthread_mutex_lock(&punteros_ram_mutex);
+			list_replace(punteros_ram,pid,puntero_ram);
+			pthread_mutex_unlock(&punteros_ram_mutex);
 			return marco; // Para que lo retorna??
 		}
 
 		actualizar_bit_u(recorredorPaginas,nro_tabla_primer_nivel);
-
+		log_info(logger,"Actualizo bit de uso a 0");
+		log_info(logger,"Muevo el puntero al siguiente marco");
 	}
 
 	//esta tercera vuelta es para encontrar 0|0
@@ -1158,13 +1250,23 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 		recorredorPaginas = list_get(marcosProceso, punteroClock);
 		punteroClock++;
 
+		log_info(logger,"La fila %d tiene u: %d y m: %d \n",recorredorPaginas->index->entrada_segundo_nivel,recorredorPaginas->entrada_segundo_nivel->u,recorredorPaginas->entrada_segundo_nivel->m);
+
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 0 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
-			log_info(logger,"Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
-				recorredorPaginas->entrada_segundo_nivel->marco);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
+			log_info(logger,"Victima CLOCK-M: marco:%d \n", marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
+			pthread_mutex_lock(&punteros_ram_mutex);
+			list_replace(punteros_ram,pid,puntero_ram);
+			pthread_mutex_unlock(&punteros_ram_mutex);
 			return marco; // Para que lo retorna??
 		}
-
+		log_info(logger,"Muevo el puntero al siguiente marco");
 	}
 
 	//esta segunda vuelta es para encontrar 0|1
@@ -1178,15 +1280,23 @@ int realizar_reemplazo_CLOCK_MODIFICADO(t_list* marcosProceso, int nro_tabla_pri
 		punteroClock++;
 
 		if(recorredorPaginas->entrada_segundo_nivel->u == 0 && recorredorPaginas->entrada_segundo_nivel->m == 1 ){
-			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones);
-			log_info(logger,"Victima CLOCK-M: pagina:%d - marco:%d \n", marco,
-				recorredorPaginas->entrada_segundo_nivel->marco);
+			marco = reemplazar_marco(recorredorPaginas,nro_tabla_primer_nivel,configuraciones,logger);
+			log_info(logger,"Victima CLOCK-M: marco:%d \n", marco);
+			if(punteroClock == (list_size(marcosProceso) - 1) ){
+				puntero_ram->marco_apuntado=0;
+			}else{
+				puntero_ram->marco_apuntado=punteroClock;
+			}
+			log_info(logger,"Muevo el puntero al siguiente marco");
+			pthread_mutex_lock(&punteros_ram_mutex);
+			list_replace(punteros_ram,pid,puntero_ram);
+			pthread_mutex_unlock(&punteros_ram_mutex);
 			return marco; // Para que lo retorna??
 		}
 	}
 }
 
-int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_primer_nivel,t_configuraciones* configuraciones){
+int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_primer_nivel,t_configuraciones* configuraciones,t_log* logger){
 	pthread_mutex_lock(&tablas_primer_nivel_mutex);
 	t_list* tabla_primer_nivel = list_get(tablas_primer_nivel,nro_tabla_primer_nivel);
 	pthread_mutex_unlock(&tablas_primer_nivel_mutex);
@@ -1200,11 +1310,12 @@ int reemplazar_marco(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla_
 	int marco_a_asignar = fila_tabla_paginacion_2doNivel->marco;
 	pthread_mutex_unlock(&actualizar_marco_mutex);
 	sem_wait(&swap_mutex_binario);
-	swap(marco_a_asignar,configuraciones);
+	swap(recorredorPaginas->index->entrada_segundo_nivel,marco_a_asignar,configuraciones,logger);
 	sem_post(&swap_mutex_binario);
+//	printf("Marco el marco anterior %d como no presente",fila_tabla_paginacion_2doNivel->marco);
 	fila_tabla_paginacion_2doNivel->p = 0;
 
-	//printf("La fila tenia u: %d y m: %d \n",fila_tabla_paginacion_2doNivel->u,fila_tabla_paginacion_2doNivel->m);
+	log_info(logger,"La fila tenia u: %d y m: %d \n",fila_tabla_paginacion_2doNivel->u,fila_tabla_paginacion_2doNivel->m);
 
 	//printf("Asigno pagina %d a marco\n", marco_a_asignar);
 
@@ -1235,13 +1346,6 @@ void actualizar_bit_u(t_info_marcos_por_proceso* recorredorPaginas,int nro_tabla
 }
 
 
-void devolver_pcb(t_pcb* pcb,t_log* logger,int socket){
-	t_paquete* paquete = crear_paquete();
-    paquete->codigo_operacion = DEVOLVER_PROCESO;
-    agregar_entero_a_paquete(paquete,pcb->pid);
-    enviar_paquete(paquete,socket);
-    eliminar_paquete(paquete);
-}
 
 t_pcb* recibir_pcb(char* buffer,t_configuraciones* configuraciones){
 	t_pcb* pcb = malloc(sizeof(t_pcb));

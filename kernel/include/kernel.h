@@ -44,7 +44,8 @@ typedef struct colas_struct {
 
 typedef struct info_bloqueado{
     t_pcb* pcb;
-    char *provieneDe;
+    int tiempo_bloqueado;
+    char *mandar_a;
 } t_info_bloqueado;
 
 typedef struct hilo_struct {
@@ -166,5 +167,7 @@ void configuraciones_free(t_configuraciones* configuraciones);
 int mandar_y_recibir_confirmacion(void* arg);
 
 void hilo_enviar_pcb_cpu(void* arg);
+
+void actualizar_tiempo_bloqueados(t_queue* cola_io_restantes,int limite_para_suspender,t_log* logger,t_configuraciones* configuraciones,int tiempo_a_anadir);
 
 #endif
