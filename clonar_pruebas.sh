@@ -10,4 +10,5 @@ else
     git clone https://github.com/sisoputnfrba/kiss-pruebas.git
     cp $DIR/* ./Consola/bin
     echo "Pruebas copiadas"
+    
 fi
